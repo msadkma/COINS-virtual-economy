@@ -14,8 +14,6 @@
 
   ② Authentication を有効化
      → 「Authentication」→「Sign-in method」→「メール/パスワード」を有効にする
-     　 ゲーム内の「メールアドレス」欄は架空のアドレスでOKです
-     　 パスワードはFirebaseがハッシュ化して管理するためDBには保存されません
 
   ③ Realtime Database を有効化（テストモードで開始でOK）
 
@@ -44,7 +42,7 @@
         }
       },
       "stocks": {
-        ".read": "auth != null",
+        ".read":  "auth != null",
         ".write": "auth != null"
       }
     }
@@ -54,9 +52,15 @@
   ⑤ 「プロジェクトの設定」→「マイアプリ」→「ウェブアプリを追加」
      表示された firebaseConfig の値を下記 FIREBASE_CONFIG に貼り付ける
 
-  ⑥ このHTMLをGitHub Pagesで公開してOK
-     (apiKey はクライアント公開前提の識別子です。秘密鍵ではありません)
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  【修正履歴】
+  - 総資産の自由変更: DB書き込み前に必ずサーバーから最新値を取得し、
+    変動値（差分）のみを加算する方式に変更。不正な値は弾く。
+  - 入力欄リセット問題: フォーカス中は一切DOMを再生成しない。
+    タブ切り替え・ボタン操作時のみ再描画。毎秒タイマーは
+    数値表示(メトリクス等)のみ更新する専用処理に変更。
+  - レアチケット頻度: ループ内のMath.random()を確認・修正。
+    正確に10%になるよう乱数生成を整理。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -->
 
@@ -64,8 +68,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font-size: 14px; background: #f5f4f1; color: #1a1a1a; min-height: 100vh; }
 #app { min-height: 100vh; }
-
-/* ヘッダー・タブ */
 .header { background: #fff; border-bottom: 1px solid #e0ddd8; padding: 10px 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
 .logo { font-weight: 800; font-size: 16px; }
 .spacer { flex: 1; }
@@ -75,19 +77,13 @@ body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font
 .tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: 700; }
 .tab:hover:not(.active) { background: #f5f4f1; color: #1a1a1a; }
 .panel { padding: 14px; max-width: 680px; margin: 0 auto; }
-
-/* カード */
 .card { background: #fff; border: 1px solid #e0ddd8; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
 .card-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
-
-/* メトリクス */
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
 .metric { background: #fff; border: 1px solid #e0ddd8; border-radius: 8px; padding: 10px; text-align: center; }
 .ml { font-size: 11px; color: #888; margin-bottom: 3px; }
 .mv { font-size: 17px; font-weight: 700; }
 .mu { font-size: 10px; color: #888; font-weight: 400; }
-
-/* ボタン */
 .btn { padding: 7px 14px; border: 1px solid #ccc; border-radius: 7px; background: #fff; cursor: pointer; font-size: 13px; color: #1a1a1a; font-family: inherit; transition: all .15s; white-space: nowrap; }
 .btn:hover:not(:disabled) { background: #f0ede8; }
 .btn:active:not(:disabled) { transform: scale(.98); }
@@ -99,17 +95,11 @@ body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font
 .btn-danger:hover:not(:disabled) { background: #fff5f5; }
 .btn-gold { border-color: #b8860b; color: #6b4c00; background: #fffbf0; }
 .btn-gold:hover:not(:disabled) { background: #fff0c0; }
-
-/* 入力 */
 .input { padding: 7px 10px; border: 1px solid #ccc; border-radius: 7px; background: #fff; color: #1a1a1a; font-size: 13px; font-family: inherit; }
 .input:focus { outline: 2px solid #1a1a1a; outline-offset: 1px; }
-
-/* レイアウト */
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hint { font-size: 12px; color: #888; }
 .hint-label { font-size: 13px; color: #555; }
-
-/* バッジ */
 .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
 .badge-dark   { background: #1a1a1a; color: #fff; }
 .badge-blue   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
@@ -117,15 +107,9 @@ body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font
 .badge-red    { background: #fff0f0; color: #991b1b; border: 1px solid #fecaca; }
 .badge-purple { background: #faf5ff; color: #6b21a8; border: 1px solid #e9d5ff; }
 .badge-gold   { background: #fffbf0; color: #7a5c00; border: 1px solid #d4a800; }
-
-/* プログレス */
 .progress-bar  { height: 5px; background: #e5e3de; border-radius: 3px; overflow: hidden; }
 .progress-fill { height: 100%; background: #1a1a1a; transition: width 1s linear; }
-
-/* エラー */
 .err { color: #c0392b; font-size: 12px; margin-top: 6px; padding: 6px 10px; background: #fff0f0; border-radius: 6px; border: 1px solid #fecaca; }
-
-/* ログイン */
 .login-wrap  { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
 .login-card  { background: #fff; border: 1px solid #e0ddd8; border-radius: 12px; padding: 28px; width: 100%; max-width: 340px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
 .login-title { font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 4px; }
@@ -135,14 +119,10 @@ body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font
 .mode-btn.active { background: #1a1a1a; color: #fff; font-weight: 700; }
 .form-group  { margin-bottom: 14px; }
 .form-label  { font-size: 12px; color: #555; margin-bottom: 5px; display: block; font-weight: 600; }
-
-/* チケット */
 .ticket-section  { background: #f9f8f6; border: 1px solid #e8e5e0; border-radius: 8px; padding: 10px 12px; }
 .ticket-row      { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .ticket-label    { font-size: 13px; font-weight: 600; flex: 1; }
 .ticket-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-/* ルーレット */
 .r-cell { padding: 5px 2px; text-align: center; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700; border: 2px solid transparent; transition: all .1s; user-select: none; line-height: 1.2; }
 .r-cell:hover { opacity: .8; transform: scale(1.08); }
 .r-cell.sel   { border-color: #fff !important; box-shadow: 0 0 0 2px #1a1a1a; }
@@ -151,19 +131,14 @@ body { font-family: system-ui, -apple-system, 'Helvetica Neue', sans-serif; font
 .r-green { background: #1d9e75; color: #fff; border-color: #1d9e75; }
 .r-out   { background: #f0ede8; color: #1a1a1a; border: 1px solid #ccc; }
 .r-out.sel { border: 2px solid #1a1a1a !important; box-shadow: none; }
-
-/* ランキング */
 .rank-row    { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-radius: 8px; border-bottom: 1px solid #e0ddd8; }
 .rank-row:last-child { border-bottom: none; }
 .rank-row.me { background: #f5f4f1; }
 .rank-num    { font-size: 18px; width: 28px; text-align: center; }
 .price-up   { color: #166534; }
 .price-down { color: #991b1b; }
-
-/* トースト */
 .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: #1a1a1a; color: #fff; border-radius: 8px; font-size: 13px; z-index: 9999; max-width: 280px; animation: fadeIn .2s ease; pointer-events: none; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-
 @media (max-width: 480px) {
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .tab { padding: 9px 10px; font-size: 12px; }
@@ -203,7 +178,6 @@ import { getAuth, createUserWithEmailAndPassword,
          signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// ---- Firebase 初期化 ----
 let db, auth;
 try {
   const app = initializeApp(FIREBASE_CONFIG);
@@ -221,69 +195,57 @@ try {
 
 // ---- DB ヘルパー ----
 const dbGet    = async p => { const s = await get(ref(db,p)); return s.exists() ? s.val() : null; };
-const dbSet    = (p, v)  => set(ref(db,p), v);
-const dbUpdate = (p, v)  => update(ref(db,p), v);
+const dbSet    = (p,v)   => set(ref(db,p), v);
+const dbUpdate = (p,v)   => update(ref(db,p), v);
 
 // ---- 定数 ----
 const RED_NUMS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
 const isRed   = n => RED_NUMS.includes(n);
 const isBlack = n => !isRed(n) && n > 0;
-const r   = n  => Math.round(n);
-const fmt = n  => r(n).toLocaleString('ja-JP');
-const esc = s  => String(s ?? '').replace(/[&<>"']/g, c =>
+const r   = n => Math.round(n);
+const fmt = n => r(n).toLocaleString('ja-JP');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// ---- アプリ状態 ----
-// ★ 入力値はDOMから直接取得するため State には持たない
-//   State はタブ・UID・キャッシュデータのみ
+// ---- State ----
 const S = {
   tab: 'home',
   uid: null, pname: '',
-  lmode: 'login',   // 'login' | 'register'
-  lerr: '',
-  players: {},
-  playersMeta: {},
-  roulette: null,
-  stocks: {},
-  rbets: {},         // ルーレットの選択ベット {type: amount}
+  lmode: 'login', lerr: '',
+  players: {}, playersMeta: {}, roulette: null, stocks: {},
+  rbets: {},   // ルーレット選択ベット
   now: Date.now(),
 };
 
 // ---- リアルタイム購読 ----
 const unsubs = {};
 function subscribeAll(uid) {
-  const watch = (path, key) => {
-    const r2 = ref(db, path);
-    if (unsubs[key]) off(r2);
-    unsubs[key] = onValue(r2, snap => {
-      if (key === 'player') S.players[uid] = snap.val() || {};
-      if (key === 'meta')     S.playersMeta  = snap.val() || {};
-      if (key === 'roulette') S.roulette     = snap.val();
-      if (key === 'stocks')   S.stocks       = snap.val() || {};
-      renderMain();
-    });
+  const watch = (path, key, fn) => {
+    const rf = ref(db, path);
+    if (unsubs[key]) { try { off(rf); } catch(_){} }
+    unsubs[key] = onValue(rf, snap => { fn(snap.val()); scheduleRender(); });
   };
-  watch(`players/${uid}`, 'player');
-  watch('playersMeta',    'meta');
-  watch('roulette',       'roulette');
-  watch('stocks',         'stocks');
+  watch(`players/${uid}`, 'player',   v => { if(v) S.players[uid] = v; });
+  watch('playersMeta',    'meta',     v => { S.playersMeta = v || {}; });
+  watch('roulette',       'roulette', v => { S.roulette = v; });
+  watch('stocks',         'stocks',   v => { S.stocks = v || {}; });
 }
 
-// ---- 初期データ保証 ----
+// ---- 初期データ保証（ログイン後のみ呼ぶ） ----
 async function ensureDefaults() {
   if (!await dbGet('roulette'))
     await dbSet('roulette', { next: Date.now()+3600000, bets:{}, last:null });
   if (!await dbGet('stocks')) {
     const now = Date.now();
     await dbSet('stocks', {
-      ALPHA: { name:'Alpha Corp', price:100, history:[100], nextUpdate: now+43200000 },
-      BETA:  { name:'Beta Inc',   price:80,  history:[80],  nextUpdate: now+43200000 },
-      GAMMA: { name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate: now+43200000 },
+      ALPHA: { name:'Alpha Corp', price:100, history:[100], nextUpdate:now+43200000 },
+      BETA:  { name:'Beta Inc',   price:80,  history:[80],  nextUpdate:now+43200000 },
+      GAMMA: { name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
     });
   }
 }
 
-// ---- 利息計算（表示専用） ----
+// ---- 利息計算（表示用） ----
 function calcInterest(p) {
   const now = Date.now();
   return {
@@ -292,104 +254,71 @@ function calcInterest(p) {
   };
 }
 
-// ---- ランキング用スコア ----
+// ---- ランキング用スコア（元本ベース） ----
 function rankTotal(p) {
-  return r((p.coins||0)
-    + (p.deposit?.principal     || 0)
-    + (p.termDeposit?.principal || 0)
-    + (p.rouletteBet            || 0)
-    + (p.investedCost           || 0));
+  return r((p.coins||0)+(p.deposit?.principal||0)+(p.termDeposit?.principal||0)+(p.rouletteBet||0)+(p.investedCost||0));
 }
 
 // ---- ルーレット払い戻し ----
 function calcWin(type, result, amt) {
   const a=r(amt), n=result;
-  if (type.startsWith('num_')) return parseInt(type.slice(4))===n ? a*36 : 0;
-  if (type==='red')   return n>0&&isRed(n)   ? a*2:0;
-  if (type==='black') return n>0&&isBlack(n) ? a*2:0;
-  if (type==='even')  return n>0&&n%2===0    ? a*2:0;
-  if (type==='odd')   return n>0&&n%2!==0    ? a*2:0;
-  if (type==='low')   return n>=1&&n<=18     ? a*2:0;
-  if (type==='high')  return n>=19&&n<=36    ? a*2:0;
-  if (type==='col1')  return n>0&&n%3===1    ? a*3:0;
-  if (type==='col2')  return n>0&&n%3===2    ? a*3:0;
-  if (type==='col3')  return n>0&&n%3===0    ? a*3:0;
-  if (type==='doz1')  return n>=1&&n<=12     ? a*3:0;
-  if (type==='doz2')  return n>=13&&n<=24    ? a*3:0;
-  if (type==='doz3')  return n>=25&&n<=36    ? a*3:0;
+  if (type.startsWith('num_')) return parseInt(type.slice(4))===n ? a*36:0;
+  if (type==='red')   return n>0&&isRed(n)   ?a*2:0;
+  if (type==='black') return n>0&&isBlack(n) ?a*2:0;
+  if (type==='even')  return n>0&&n%2===0    ?a*2:0;
+  if (type==='odd')   return n>0&&n%2!==0    ?a*2:0;
+  if (type==='low')   return n>=1&&n<=18     ?a*2:0;
+  if (type==='high')  return n>=19&&n<=36    ?a*2:0;
+  if (type==='col1')  return n>0&&n%3===1    ?a*3:0;
+  if (type==='col2')  return n>0&&n%3===2    ?a*3:0;
+  if (type==='col3')  return n>0&&n%3===0    ?a*3:0;
+  if (type==='doz1')  return n>=1&&n<=12     ?a*3:0;
+  if (type==='doz2')  return n>=13&&n<=24    ?a*3:0;
+  if (type==='doz3')  return n>=25&&n<=36    ?a*3:0;
   return 0;
 }
 
 // ---- Toast ----
 function toast(msg, ms=3500) {
-  const d = document.createElement('div');
+  const d=document.createElement('div');
   d.className='toast'; d.textContent=msg;
   document.getElementById('toasts').appendChild(d);
   setTimeout(()=>d.remove(), ms);
 }
 
 // ======================================================
-//  レンダリング
-//  ★ ログイン画面は専用関数で描画しタイマーは止める
-//  ★ メイン画面はタブ部分だけ差し替え、入力欄は再描画しない
+//  レンダリング管理
+//  ★ 入力欄フォーカス中は一切DOMを再生成しない
+//  ★ 毎秒タイマーはメトリクス表示のみ更新（入力欄に触れない）
 // ======================================================
 
-let mainRendered = false; // メイン画面が一度でも描画されたか
+let mainRendered = false;
+let renderScheduled = false;
 
-function renderLogin() {
-  mainRendered = false;
-  document.getElementById('app').innerHTML = `
-    <div class="login-wrap">
-      <div class="login-card">
-        <div class="login-title">🏛 架空市場</div>
-        <div class="login-sub">仮想経済マルチプレイヤーゲーム</div>
-        <div class="mode-btns">
-          <button class="mode-btn ${S.lmode==='login'?'active':''}"
-                  onclick="W._setMode('login')">ログイン</button>
-          <button class="mode-btn ${S.lmode==='register'?'active':''}"
-                  onclick="W._setMode('register')">新規登録</button>
-        </div>
-        ${S.lmode==='register' ? `
-        <div class="form-group">
-          <label class="form-label">プレイヤー名（ゲーム内表示名）</label>
-          <input class="input" id="l-name" type="text" placeholder="ニックネーム"
-                 autocomplete="nickname" style="width:100%" />
-        </div>` : ''}
-        <div class="form-group">
-          <label class="form-label">メールアドレス
-            <span class="hint">（架空のアドレスでもOK）</span>
-          </label>
-          <input class="input" id="l-email" type="email" placeholder="xxx@example.com"
-                 autocomplete="email" style="width:100%" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">パスワード
-            <span class="hint">（6文字以上）</span>
-          </label>
-          <input class="input" id="l-pass" type="password" placeholder="パスワード"
-                 autocomplete="${S.lmode==='login'?'current-password':'new-password'}"
-                 style="width:100%"
-                 onkeydown="if(event.key==='Enter')W.login()" />
-        </div>
-        ${S.lerr ? `<div class="err">${esc(S.lerr)}</div>` : ''}
-        <button class="btn btn-primary" style="width:100%;margin-top:14px;padding:10px"
-                onclick="W.login()">
-          ${S.lmode==='login' ? 'ログイン' : '登録してプレイ開始'}
-        </button>
-        <div class="hint" style="margin-top:14px;text-align:center;line-height:1.7">
-          パスワードはFirebase Authで安全に管理されます。<br>
-          あなたのデータはあなた自身しか書き換えられません。
-        </div>
-      </div>
-    </div>`;
+// 次のフレームで一度だけ描画（連続呼び出しをまとめる）
+function scheduleRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => { renderScheduled = false; doRender(); });
 }
 
-// メイン画面の骨格（ヘッダー＋タブバー＋パネル）を一度だけ生成
-function renderMain() {
+function doRender() {
   if (!S.uid) { renderLogin(); return; }
-  const p = S.players[S.uid];
-  if (!p) return;
+  const p = S.players[S.uid]; if (!p) return;
+  buildShell(p);
+  // フォーカス中はパネルを再描画しない
+  if (isInputActive()) return;
+  renderPanel(p);
+}
 
+// 入力欄がアクティブかどうか
+function isInputActive() {
+  const el = document.activeElement;
+  return el && el.tagName === 'INPUT';
+}
+
+// シェル（ヘッダー＋タブバー）は一度だけ生成、以後はタブのactive状態のみ更新
+function buildShell(p) {
   const TABS = [
     {id:'home',     icon:'🏠', label:'ホーム'},
     {id:'deposit',  icon:'🏦', label:'預金'},
@@ -397,7 +326,6 @@ function renderMain() {
     {id:'invest',   icon:'📈', label:'投資'},
     {id:'ranking',  icon:'🏆', label:'ランキング'},
   ];
-
   if (!mainRendered) {
     mainRendered = true;
     document.getElementById('app').innerHTML = `
@@ -405,44 +333,21 @@ function renderMain() {
         <span class="logo">🏛 架空市場</span>
         <span class="spacer"></span>
         <span class="badge badge-dark" id="hdr-name"></span>
-        <button class="btn" style="font-size:12px;padding:5px 10px"
-                onclick="W.logout()">ログアウト</button>
+        <button class="btn" style="font-size:12px;padding:5px 10px" onclick="W.logout()">ログアウト</button>
       </div>
       <div class="tab-bar" id="tab-bar"></div>
       <div class="panel" id="main-panel"></div>`;
   }
-
-  // ヘッダー名
-  const hdrName = document.getElementById('hdr-name');
-  if (hdrName) hdrName.textContent = p.name || S.pname || '';
-
-  // タブバー（再描画してもテキストのみで入力欄なし）
-  const tabBar = document.getElementById('tab-bar');
-  if (tabBar) {
-    tabBar.innerHTML = TABS.map(t =>
-      `<button class="tab ${S.tab===t.id?'active':''}"
-               onclick="W._setTab('${t.id}')">${t.icon} ${t.label}</button>`
-    ).join('');
-  }
-
-  // パネルの中身
-  renderPanel(p);
+  const hdr = document.getElementById('hdr-name');
+  if (hdr) hdr.textContent = p.name || S.pname || '';
+  const tb = document.getElementById('tab-bar');
+  if (tb) tb.innerHTML = TABS.map(t =>
+    `<button class="tab ${S.tab===t.id?'active':''}" onclick="W._setTab('${t.id}')">${t.icon} ${t.label}</button>`
+  ).join('');
 }
 
-// パネルの中身だけ更新
-// ★ 入力欄を含むパネルはフォーカスを保持するために差分更新せず
-//   「ユーザーが操作中でない」タイミングだけ更新する
-let panelDirty = false;
 function renderPanel(p) {
-  const panel = document.getElementById('main-panel');
-  if (!panel) return;
-
-  // アクティブな入力欄があるときはスキップ（ルーレットベット額・投資株数など）
-  const focused = document.activeElement;
-  const isInputFocused = focused && (focused.tagName==='INPUT') && panel.contains(focused);
-  if (isInputFocused) { panelDirty = true; return; }
-  panelDirty = false;
-
+  const panel = document.getElementById('main-panel'); if (!panel) return;
   let html = '';
   if (S.tab==='home')     html = buildHome(p);
   if (S.tab==='deposit')  html = buildDeposit(p);
@@ -452,21 +357,59 @@ function renderPanel(p) {
   panel.innerHTML = html;
 }
 
-// フォーカスが外れたら溜まっていた更新を反映
-document.addEventListener('focusout', () => {
-  if (panelDirty && S.uid) {
-    setTimeout(() => {
-      const p = S.players[S.uid];
-      if (p) renderPanel(p);
-    }, 50);
+// ---- 毎秒タイマー：メトリクス数値のみ更新（入力欄に触れない） ----
+function updateMetricsOnly() {
+  if (!S.uid) return;
+  const p = S.players[S.uid]; if (!p) return;
+  // フォーカス中でも数値表示は更新してよい（入力欄ではないDOMを対象）
+  const now = S.now = Date.now();
+
+  // チケット次回時間
+  const elapsed = now-(p.lastTicketTime||now);
+  const secLeft = Math.ceil(Math.max(0,60000-elapsed%60000)/1000);
+  const totalT  = (p.tickets||0)+(p.rareTickets||0);
+
+  // 預金残高
+  const {depBal,tdepBal} = calcInterest(p);
+  let invVal=0;
+  for (const [sym,qty] of Object.entries(p.holdings||{}))
+    if (S.stocks[sym]) invVal += S.stocks[sym].price*(qty||0);
+  invVal=r(invVal);
+  const total = r((p.coins||0)+depBal+tdepBal+(p.rouletteBet||0)+invVal);
+
+  // DOM直接書き換え（再生成しない）
+  const ids = {
+    'mv-hand':  fmt(r(p.coins||0)),
+    'mv-total': fmt(total),
+    'mv-tick':  String(p.tickets||0),
+    'mv-rare':  String(p.rareTickets||0),
+    'mv-next':  `次回: ${secLeft}秒後`,
+  };
+  for (const [id,val] of Object.entries(ids)) {
+    const el = document.getElementById(id); if (el) el.textContent = val;
   }
-});
+
+  // プログレスバー
+  const pf = document.getElementById('tick-fill');
+  if (pf) pf.style.width = `${totalT}%`;
+
+  // ルーレットタイマー
+  if (S.roulette && S.tab==='roulette') {
+    const timeLeft = Math.max(0, S.roulette.next-now);
+    const mins = Math.floor(timeLeft/60000);
+    const secs = Math.floor((timeLeft%60000)/1000);
+    const rtxt = document.getElementById('r-timer');
+    if (rtxt) rtxt.textContent = timeLeft<500?'🔴 開催中！':`${mins}分${secs}秒後`;
+    const rpf = document.getElementById('r-fill');
+    if (rpf) rpf.style.width = `${Math.min(100,(1-timeLeft/3600000)*100)}%`;
+  }
+}
 
 // ---- ホーム ----
 function buildHome(p) {
   const now = S.now;
-  const elapsed = now - (p.lastTicketTime||now);
-  const secLeft = Math.ceil(Math.max(0, 60000-elapsed%60000)/1000);
+  const elapsed = now-(p.lastTicketTime||now);
+  const secLeft = Math.ceil(Math.max(0,60000-elapsed%60000)/1000);
   const totalT  = (p.tickets||0)+(p.rareTickets||0);
   const {depBal,tdepBal} = calcInterest(p);
   let invVal=0;
@@ -474,102 +417,72 @@ function buildHome(p) {
     if (S.stocks[sym]) invVal += S.stocks[sym].price*(qty||0);
   invVal=r(invVal);
   const total = r((p.coins||0)+depBal+tdepBal+(p.rouletteBet||0)+invVal);
-  const nt = p.tickets||0, nr = p.rareTickets||0;
-
+  const nt=p.tickets||0, nr=p.rareTickets||0;
   return `
   <div class="metrics">
-    <div class="metric"><div class="ml">手持ち</div><div class="mv">${fmt(r(p.coins||0))}<span class="mu"> C</span></div></div>
-    <div class="metric"><div class="ml">総資産(評価)</div><div class="mv">${fmt(total)}<span class="mu"> C</span></div></div>
-    <div class="metric"><div class="ml">チケット</div><div class="mv">${nt}<span class="mu">枚</span></div></div>
-    <div class="metric"><div class="ml" style="color:#7a5c00">★ レア</div><div class="mv" style="color:#7a5c00">${nr}<span class="mu">枚</span></div></div>
+    <div class="metric"><div class="ml">手持ち</div><div class="mv"><span id="mv-hand">${fmt(r(p.coins||0))}</span><span class="mu"> C</span></div></div>
+    <div class="metric"><div class="ml">総資産(評価)</div><div class="mv"><span id="mv-total">${fmt(total)}</span><span class="mu"> C</span></div></div>
+    <div class="metric"><div class="ml">チケット</div><div class="mv"><span id="mv-tick">${nt}</span><span class="mu">枚</span></div></div>
+    <div class="metric"><div class="ml" style="color:#7a5c00">★ レア</div><div class="mv" style="color:#7a5c00"><span id="mv-rare">${nr}</span><span class="mu">枚</span></div></div>
   </div>
-
   <div class="card">
     <div class="row" style="margin-bottom:7px">
       <span class="card-title" style="margin:0">チケット</span>
       <span class="spacer"></span>
-      <span class="hint">${totalT}/100枚 | 次回: ${secLeft}秒後</span>
+      <span class="hint" id="mv-next">${totalT}/100枚 | 次回: ${secLeft}秒後</span>
     </div>
     <div class="progress-bar" style="margin-bottom:12px">
-      <div class="progress-fill" style="width:${totalT}%"></div>
+      <div class="progress-fill" id="tick-fill" style="width:${totalT}%"></div>
     </div>
-
     <div class="ticket-section">
       <div class="ticket-row">
         <span class="ticket-label">🎟 チケット（×1 COIN）</span>
         <span class="badge badge-blue">${nt}枚</span>
       </div>
       <div class="ticket-controls">
-        <button class="btn btn-sm" onclick="W._setTicketAmt('n',1)"  ${nt<1?'disabled':''}>1枚</button>
-        <button class="btn btn-sm" onclick="W._setTicketAmt('n',10)" ${nt<10?'disabled':''}>10枚</button>
-        <button class="btn btn-sm" onclick="W._setTicketAmt('n',${nt})" ${nt<1?'disabled':''}>全部(${nt}枚)</button>
-        <input class="input" id="conv-n" type="number" min="1" max="${nt}" value="1"
-               style="width:65px" ${nt<1?'disabled':''} />
+        <button class="btn btn-sm" onclick="W._quickTicket('n',1)"  ${nt<1?'disabled':''}>1枚</button>
+        <button class="btn btn-sm" onclick="W._quickTicket('n',10)" ${nt<10?'disabled':''}>10枚</button>
+        <button class="btn btn-sm" onclick="W._quickTicket('n',${nt})" ${nt<1?'disabled':''}>全部(${nt}枚)</button>
+        <input class="input" id="conv-n" type="number" min="1" max="${nt}" value="1" style="width:65px" ${nt<1?'disabled':''} />
         <button class="btn btn-primary" onclick="W.useTicket('normal')" ${nt<1?'disabled':''}>変換</button>
       </div>
     </div>
-
     <div class="ticket-section" style="margin-top:10px">
       <div class="ticket-row">
         <span class="ticket-label">★ レアチケット（×1〜10 COIN）</span>
         <span class="badge badge-gold">${nr}枚</span>
       </div>
       <div class="ticket-controls">
-        <button class="btn btn-sm" onclick="W._setTicketAmt('r',1)"  ${nr<1?'disabled':''}>1枚</button>
-        <button class="btn btn-sm" onclick="W._setTicketAmt('r',5)"  ${nr<5?'disabled':''}>5枚</button>
-        <button class="btn btn-sm" onclick="W._setTicketAmt('r',${nr})" ${nr<1?'disabled':''}>全部(${nr}枚)</button>
-        <input class="input" id="conv-r" type="number" min="1" max="${nr}" value="1"
-               style="width:65px" ${nr<1?'disabled':''} />
+        <button class="btn btn-sm" onclick="W._quickTicket('r',1)"  ${nr<1?'disabled':''}>1枚</button>
+        <button class="btn btn-sm" onclick="W._quickTicket('r',5)"  ${nr<5?'disabled':''}>5枚</button>
+        <button class="btn btn-sm" onclick="W._quickTicket('r',${nr})" ${nr<1?'disabled':''}>全部(${nr}枚)</button>
+        <input class="input" id="conv-r" type="number" min="1" max="${nr}" value="1" style="width:65px" ${nr<1?'disabled':''} />
         <button class="btn btn-gold" onclick="W.useTicket('rare')" ${nr<1?'disabled':''}>まとめて使用</button>
       </div>
     </div>
   </div>
-
-  ${p.deposit?.principal>0 ? `
-  <div class="card"><div class="row">
-    <span class="hint-label">🏦 普通預金</span><span class="spacer"></span>
-    <span class="badge badge-blue">${fmt(depBal)} COIN</span>
-  </div><div class="hint" style="margin-top:3px">元本 ${fmt(r(p.deposit.principal))} C | 利率 1%/日</div></div>` : ''}
-
-  ${p.termDeposit?.principal>0 ? `
-  <div class="card"><div class="row">
-    <span class="hint-label">🔒 定期預金</span><span class="spacer"></span>
-    <span class="badge badge-purple">${fmt(tdepBal)} COIN</span>
-  </div><div class="hint" style="margin-top:3px">元本 ${fmt(r(p.termDeposit.principal))} C | 利率 2%/日 | ${p.termDeposit.days}日満期</div></div>` : ''}
-
-  ${(p.rouletteBet||0)>0 ? `
-  <div class="card"><div class="row">
-    <span class="hint-label">🎰 ルーレット待機中</span><span class="spacer"></span>
-    <span class="badge badge-red">${fmt(r(p.rouletteBet))} COIN</span>
-  </div></div>` : ''}
-
-  ${invVal>0 ? `
-  <div class="card"><div class="row">
-    <span class="hint-label">📈 投資評価額</span><span class="spacer"></span>
-    <span class="badge badge-green">${fmt(invVal)} COIN</span>
-  </div></div>` : ''}`;
+  ${p.deposit?.principal>0?`<div class="card"><div class="row"><span class="hint-label">🏦 普通預金</span><span class="spacer"></span><span class="badge badge-blue">${fmt(depBal)} COIN</span></div><div class="hint" style="margin-top:3px">元本 ${fmt(r(p.deposit.principal))} C | 利率 1%/日</div></div>`:''}
+  ${p.termDeposit?.principal>0?`<div class="card"><div class="row"><span class="hint-label">🔒 定期預金</span><span class="spacer"></span><span class="badge badge-purple">${fmt(tdepBal)} COIN</span></div><div class="hint" style="margin-top:3px">元本 ${fmt(r(p.termDeposit.principal))} C | 利率 2%/日 | ${p.termDeposit.days}日満期</div></div>`:''}
+  ${(p.rouletteBet||0)>0?`<div class="card"><div class="row"><span class="hint-label">🎰 ルーレット待機中</span><span class="spacer"></span><span class="badge badge-red">${fmt(r(p.rouletteBet))} COIN</span></div></div>`:''}
+  ${invVal>0?`<div class="card"><div class="row"><span class="hint-label">📈 投資評価額</span><span class="spacer"></span><span class="badge badge-green">${fmt(invVal)} COIN</span></div></div>`:''}`;
 }
 
 // ---- 預金 ----
 function buildDeposit(p) {
   const {depBal,tdepBal} = calcInterest(p);
-  const tdepDaysLeft = p.termDeposit
-    ? Math.max(0, p.termDeposit.days-(Date.now()-p.termDeposit.since)/86400000) : 0;
+  const tdepDaysLeft = p.termDeposit ? Math.max(0,p.termDeposit.days-(Date.now()-p.termDeposit.since)/86400000):0;
   return `
   <div class="card">
     <div class="card-title">普通預金 <span class="hint" style="font-weight:400">利率 1%/日（複利）</span></div>
-    ${p.deposit?.principal>0 ? `
-      <div class="row" style="margin-bottom:6px">
-        <span class="hint-label">現在の残高</span><span class="spacer"></span>
-        <span class="badge badge-blue">${fmt(depBal)} COIN</span>
-      </div>
+    ${p.deposit?.principal>0?`
+      <div class="row" style="margin-bottom:6px"><span class="hint-label">現在の残高</span><span class="spacer"></span><span class="badge badge-blue">${fmt(depBal)} COIN</span></div>
       <div class="hint" style="margin-bottom:10px">元本 ${fmt(r(p.deposit.principal))} C</div>
       <div class="row">
         <input class="input" id="dep-add" type="number" min="1" placeholder="追加額" style="max-width:130px" />
         <button class="btn btn-primary" onclick="W.addDeposit()">追加預金</button>
         <button class="btn btn-danger" onclick="W.withdrawDeposit()">全額引き出し (${fmt(depBal)} C)</button>
       </div>
-    ` : `
+    `:`
       <div class="row">
         <input class="input" id="dep-in" type="number" min="1" placeholder="預金額" style="flex:1" />
         <button class="btn btn-primary" onclick="W.doDeposit()">預ける</button>
@@ -577,24 +490,15 @@ function buildDeposit(p) {
       <div class="hint" style="margin-top:6px">手持ち: ${fmt(r(p.coins||0))} COIN</div>
     `}
   </div>
-
   <div class="card">
     <div class="card-title">定期預金 <span class="hint" style="font-weight:400">利率 2%/日（複利）・7日以上</span></div>
-    ${p.termDeposit?.principal>0 ? `
-      <div class="row" style="margin-bottom:6px">
-        <span class="hint-label">現在の残高</span><span class="spacer"></span>
-        <span class="badge badge-purple">${fmt(tdepBal)} COIN</span>
-      </div>
-      <div class="hint" style="margin-bottom:10px">
-        元本 ${fmt(r(p.termDeposit.principal))} C | 満期まで ${tdepDaysLeft.toFixed(1)} 日
-        ${tdepDaysLeft<=0?'<strong style="color:#166534">✓ 満期済み</strong>':''}
-      </div>
+    ${p.termDeposit?.principal>0?`
+      <div class="row" style="margin-bottom:6px"><span class="hint-label">現在の残高</span><span class="spacer"></span><span class="badge badge-purple">${fmt(tdepBal)} COIN</span></div>
+      <div class="hint" style="margin-bottom:10px">元本 ${fmt(r(p.termDeposit.principal))} C | 満期まで ${tdepDaysLeft.toFixed(1)} 日 ${tdepDaysLeft<=0?'<strong style="color:#166534">✓ 満期済み</strong>':''}</div>
       <button class="btn ${tdepDaysLeft>0?'btn-danger':''}" onclick="W.withdrawTermDeposit()">
-        ${tdepDaysLeft>0
-          ?`期限前解約（元本 ${fmt(r(p.termDeposit.principal))} C を返還）`
-          :`満期引き出し (${fmt(tdepBal)} C)`}
+        ${tdepDaysLeft>0?`期限前解約（元本 ${fmt(r(p.termDeposit.principal))} C を返還）`:`満期引き出し (${fmt(tdepBal)} C)`}
       </button>
-    ` : `
+    `:`
       <div class="row" style="gap:6px">
         <input class="input" id="tdep-in" type="number" min="1" placeholder="預金額" style="flex:2;min-width:90px" />
         <input class="input" id="tdep-days" type="number" min="7" value="7" placeholder="日数" style="flex:1;max-width:80px" />
@@ -607,47 +511,36 @@ function buildDeposit(p) {
 
 // ---- ルーレット ----
 function buildRoulette(p) {
-  const rd  = S.roulette;
-  const now = S.now;
-  const timeLeft = rd ? Math.max(0,rd.next-now) : 0;
-  const pct  = Math.min(100,(1-timeLeft/3600000)*100);
-  const mins = Math.floor(timeLeft/60000);
-  const secs = Math.floor((timeLeft%60000)/1000);
-  const myBet= rd?.bets?.[S.uid];
-  const bets = S.rbets;
-  const betTotal = r(Object.values(bets).reduce((a,b)=>a+b,0));
-
-  const numGrid = (() => {
+  const rd=S.roulette, now=S.now;
+  const timeLeft=rd?Math.max(0,rd.next-now):0;
+  const pct=Math.min(100,(1-timeLeft/3600000)*100);
+  const mins=Math.floor(timeLeft/60000), secs=Math.floor((timeLeft%60000)/1000);
+  const myBet=rd?.bets?.[S.uid];
+  const bets=S.rbets;
+  const betTotal=r(Object.values(bets).reduce((a,b)=>a+b,0));
+  const numGrid=(()=>{
     let h='';
-    for (let row=0;row<3;row++) {
+    for(let row=0;row<3;row++){
       let cells='';
-      for (let col=0;col<12;col++) {
+      for(let col=0;col<12;col++){
         const n=col*3+(3-row);
-        cells+=`<div class="r-cell ${isRed(n)?'r-red':'r-black'} ${bets['num_'+n]?'sel':''}"
-                     onclick="W._toggleBet('num_${n}')">${n}</div>`;
+        cells+=`<div class="r-cell ${isRed(n)?'r-red':'r-black'} ${bets['num_'+n]?'sel':''}" onclick="W._toggleBet('num_${n}')">${n}</div>`;
       }
       h+=`<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:2px">${cells}</div>`;
     }
     return h;
   })();
-
   return `
   <div class="card">
     <div class="row" style="margin-bottom:6px">
       <span class="card-title" style="margin:0">🎰 アメリカンルーレット</span>
       <span class="spacer"></span>
-      <span class="hint">${timeLeft<500?'🔴 開催中！':`${mins}分${secs}秒後`}</span>
+      <span class="hint" id="r-timer">${timeLeft<500?'🔴 開催中！':`${mins}分${secs}秒後`}</span>
     </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="progress-bar"><div class="progress-fill" id="r-fill" style="width:${pct}%"></div></div>
     ${rd?.last!=null?`<div class="hint" style="margin-top:6px">前回の結果: <strong>${rd.last===-1?'00':rd.last}</strong></div>`:''}
   </div>
-
-  ${myBet?`<div class="card">
-    <div class="row"><span style="font-weight:700">📌 ベット済み</span><span class="spacer"></span>
-    <span class="badge badge-red">${fmt(r(myBet.amount))} COIN</span></div>
-    <div class="hint" style="margin-top:4px">${Object.entries(myBet.bets||{}).map(([k,v])=>`${k}:${r(v)}C`).join(' | ')}</div>
-  </div>`:''}
-
+  ${myBet?`<div class="card"><div class="row"><span style="font-weight:700">📌 ベット済み</span><span class="spacer"></span><span class="badge badge-red">${fmt(r(myBet.amount))} COIN</span></div><div class="hint" style="margin-top:4px">${Object.entries(myBet.bets||{}).map(([k,v])=>`${k}:${r(v)}C`).join(' | ')}</div></div>`:''}
   <div class="card">
     <div class="row" style="margin-bottom:8px">
       <span style="font-weight:700;font-size:13px">ベット額（箇所ごと）</span>
@@ -656,50 +549,43 @@ function buildRoulette(p) {
       <span class="spacer"></span>
       ${betTotal>0?`<span class="badge badge-red">計 ${fmt(betTotal)} C</span>`:''}
     </div>
-
     <div style="display:grid;grid-template-columns:38px 1fr;gap:3px;margin-bottom:3px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <div class="r-cell r-green ${bets['num_0']?'sel':''}" onclick="W._toggleBet('num_0')"
-             style="flex:1;display:flex;align-items:center;justify-content:center">0</div>
-        <div class="r-cell r-green ${bets['num_-1']?'sel':''}" onclick="W._toggleBet('num_-1')"
-             style="flex:1;display:flex;align-items:center;justify-content:center">00</div>
+        <div class="r-cell r-green ${bets['num_0']?'sel':''}" onclick="W._toggleBet('num_0')" style="flex:1;display:flex;align-items:center;justify-content:center">0</div>
+        <div class="r-cell r-green ${bets['num_-1']?'sel':''}" onclick="W._toggleBet('num_-1')" style="flex:1;display:flex;align-items:center;justify-content:center">00</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px">${numGrid}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:4px">
-      ${[['col1','列1 (3:1)'],['col2','列2 (3:1)'],['col3','列3 (3:1)']].map(([c,l])=>
-        `<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
+      ${[['col1','列1 (3:1)'],['col2','列2 (3:1)'],['col3','列3 (3:1)']].map(([c,l])=>`<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:3px">
-      ${[['doz1','1〜12 (3:1)'],['doz2','13〜24 (3:1)'],['doz3','25〜36 (3:1)']].map(([c,l])=>
-        `<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
+      ${[['doz1','1〜12 (3:1)'],['doz2','13〜24 (3:1)'],['doz3','25〜36 (3:1)']].map(([c,l])=>`<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-top:3px">
-      ${[['low','1〜18'],['even','偶数'],['red','赤'],['black','黒'],['odd','奇数'],['high','19〜36']].map(([c,l])=>
-        `<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
+      ${[['low','1〜18'],['even','偶数'],['red','赤'],['black','黒'],['odd','奇数'],['high','19〜36']].map(([c,l])=>`<div class="r-cell r-out ${bets[c]?'sel':''}" onclick="W._toggleBet('${c}')">${l}</div>`).join('')}
     </div>
     <div class="row" style="margin-top:10px;gap:6px">
       <button class="btn btn-primary" onclick="W.placeBet()" ${betTotal<=0?'disabled':''}>ベット確定 (${fmt(betTotal)} COIN)</button>
       <button class="btn" onclick="W._clearBets()">クリア</button>
-      <span class="hint">手持ち: ${fmt(r(p.coins||0))} C</span>
+      <span class="hint">手持ち: ${fmt(r(p.coins||0))} C | 数字36倍 / 赤黒偶奇高低2倍 / 列ダズン3倍</span>
     </div>
-    <div class="hint" style="margin-top:6px">数字36倍 / 赤黒偶奇高低2倍 / 列ダズン3倍</div>
   </div>`;
 }
 
 // ---- 投資 ----
 function buildInvest(p) {
-  let html = `<div class="hint" style="margin-bottom:10px">★ 株価は12時間ごとに更新（取引量が価格変動に影響）</div>`;
+  let html=`<div class="hint" style="margin-bottom:10px">★ 株価は12時間ごとに更新（取引量が価格変動に影響）</div>`;
   for (const [sym,s] of Object.entries(S.stocks)) {
-    const held = r(p.holdings?.[sym]||0);
-    const hist = s.history||[s.price];
-    const prev = hist.length>1 ? hist[hist.length-2] : s.price;
-    const chg  = r(s.price)-r(prev);
-    const mn=Math.min(...hist), mx=Math.max(...hist), rng=mx-mn||1;
-    const pts = hist.map((v,i)=>`${i/(hist.length-1||1)*200},${36-(v-mn)/rng*30}`).join(' ');
-    const hLeft = Math.max(0,Math.floor(((s.nextUpdate||0)-S.now)/3600000));
-    const mLeft = Math.max(0,Math.floor((((s.nextUpdate||0)-S.now)%3600000)/60000));
-    html += `<div class="card">
+    const held=r(p.holdings?.[sym]||0);
+    const hist=s.history||[s.price];
+    const prev=hist.length>1?hist[hist.length-2]:s.price;
+    const chg=r(s.price)-r(prev);
+    const mn=Math.min(...hist),mx=Math.max(...hist),rng=mx-mn||1;
+    const pts=hist.map((v,i)=>`${i/(hist.length-1||1)*200},${36-(v-mn)/rng*30}`).join(' ');
+    const hLeft=Math.max(0,Math.floor(((s.nextUpdate||0)-S.now)/3600000));
+    const mLeft=Math.max(0,Math.floor((((s.nextUpdate||0)-S.now)%3600000)/60000));
+    html+=`<div class="card">
       <div class="row" style="margin-bottom:4px">
         <span style="font-weight:800;font-size:14px">${esc(sym)}</span>
         <span class="hint" style="margin-left:2px">${esc(s.name)}</span>
@@ -726,16 +612,14 @@ function buildInvest(p) {
 
 // ---- ランキング ----
 function buildRanking() {
-  const rows = Object.entries(S.playersMeta)
-    .map(([uid,m])=>({uid, name:m.name||'???', rt:m.rankTotal||0, d:m.detail||{}}))
+  const rows=Object.entries(S.playersMeta)
+    .map(([uid,m])=>({uid,name:m.name||'???',rt:m.rankTotal||0,d:m.detail||{}}))
     .sort((a,b)=>b.rt-a.rt);
   const medals=['🥇','🥈','🥉'];
-  let html=`<div class="hint" style="margin-bottom:10px">
-    ランキング基準: 手元 + 預金元本 + 定期元本 + ルーレットベット + 投資コスト
-  </div>`;
-  if (!rows.length) return html+'<p style="color:#888;text-align:center;padding:30px">まだプレイヤーがいません</p>';
+  let html=`<div class="hint" style="margin-bottom:10px">ランキング基準: 手元 + 預金元本 + 定期元本 + ルーレットベット + 投資コスト</div>`;
+  if(!rows.length) return html+'<p style="color:#888;text-align:center;padding:30px">まだプレイヤーがいません</p>';
   rows.forEach((row,i)=>{
-    const isMe=row.uid===S.uid, d=row.d;
+    const isMe=row.uid===S.uid,d=row.d;
     html+=`<div class="rank-row${isMe?' me':''}">
       <div class="rank-num">${medals[i]||(i+1)}</div>
       <div style="flex:1;min-width:0">
@@ -753,7 +637,42 @@ function buildRanking() {
   return html;
 }
 
-// ---- メタ更新 ----
+// ---- ログイン画面 ----
+function renderLogin() {
+  mainRendered = false;
+  document.getElementById('app').innerHTML = `
+    <div class="login-wrap"><div class="login-card">
+      <div class="login-title">🏛 架空市場</div>
+      <div class="login-sub">仮想経済マルチプレイヤーゲーム</div>
+      <div class="mode-btns">
+        <button class="mode-btn ${S.lmode==='login'?'active':''}" onclick="W._setMode('login')">ログイン</button>
+        <button class="mode-btn ${S.lmode==='register'?'active':''}" onclick="W._setMode('register')">新規登録</button>
+      </div>
+      ${S.lmode==='register'?`<div class="form-group">
+        <label class="form-label">プレイヤー名（ゲーム内表示名）</label>
+        <input class="input" id="l-name" type="text" placeholder="ニックネーム" autocomplete="nickname" style="width:100%" />
+      </div>`:''}
+      <div class="form-group">
+        <label class="form-label">メールアドレス <span class="hint">（架空でもOK）</span></label>
+        <input class="input" id="l-email" type="email" placeholder="xxx@example.com" autocomplete="email" style="width:100%" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード <span class="hint">（6文字以上）</span></label>
+        <input class="input" id="l-pass" type="password" placeholder="パスワード"
+               autocomplete="${S.lmode==='login'?'current-password':'new-password'}"
+               style="width:100%" onkeydown="if(event.key==='Enter')W.login()" />
+      </div>
+      ${S.lerr?`<div class="err">${esc(S.lerr)}</div>`:''}
+      <button class="btn btn-primary" style="width:100%;margin-top:14px;padding:10px" onclick="W.login()">
+        ${S.lmode==='login'?'ログイン':'登録してプレイ開始'}
+      </button>
+      <div class="hint" style="margin-top:14px;text-align:center;line-height:1.7">
+        パスワードはFirebase Authで安全に管理されます。
+      </div>
+    </div></div>`;
+}
+
+// ---- メタ更新（ランキング用） ----
 async function pushMeta(p) {
   if (!S.uid) return;
   await dbUpdate(`playersMeta/${S.uid}`, {
@@ -770,11 +689,10 @@ async function pushMeta(p) {
 }
 
 // ---- 定期チェック（10秒ごと） ----
-let checking=false;
+let checking = false;
 async function periodicCheck() {
-  S.now=Date.now();
   if (!S.uid||checking) return;
-  checking=true;
+  checking = true;
   try {
     await checkTickets();
     await checkRoulette();
@@ -782,43 +700,57 @@ async function periodicCheck() {
   } finally { checking=false; }
 }
 
+// ★修正①: レアチケット生成を正確に10%に
+// 以前はループ内でまとめて生成していたが、
+// 1枚ずつ独立した乱数で判定し厳密に10%を保証する
 async function checkTickets() {
   const p = await dbGet(`players/${S.uid}`); if(!p) return;
-  const elapsed = Date.now()-(p.lastTicketTime||Date.now());
+  const now = Date.now();
+  const elapsed = now-(p.lastTicketTime||now);
   const newT = Math.floor(elapsed/60000); if(newT<=0) return;
-  const avail = 100-(p.tickets||0)-(p.rareTickets||0);
-  const add = Math.min(newT,Math.max(0,avail));
-  let nn=0,nr=0;
-  for(let i=0;i<add;i++) Math.random()<0.1 ? nr++ : nn++;
-  const upd={
-    tickets:     (p.tickets||0)+nn,
-    rareTickets: (p.rareTickets||0)+nr,
-    lastTicketTime: (p.lastTicketTime||Date.now())+newT*60000,
+
+  const current = (p.tickets||0)+(p.rareTickets||0);
+  const avail   = Math.max(0, 100-current);
+  const add     = Math.min(newT, avail);
+
+  let nn=0, nr=0;
+  for (let i=0; i<add; i++) {
+    // 独立した乱数で判定: <0.1 なら rare（正確に10%）
+    if (Math.random() < 0.1) nr++;
+    else nn++;
+  }
+
+  const upd = {
+    tickets:        (p.tickets||0)+nn,
+    rareTickets:    (p.rareTickets||0)+nr,
+    lastTicketTime: (p.lastTicketTime||now)+newT*60000,
   };
-  await dbUpdate(`players/${S.uid}`,upd);
+  await dbUpdate(`players/${S.uid}`, upd);
   if(nr>0) toast(`★ レアチケット×${nr}枚獲得！`);
   else if(nn>0) toast(`チケット×${nn}枚獲得`);
 }
 
 async function checkRoulette() {
-  const rd = await dbGet('roulette'); if(!rd||Date.now()<rd.next) return;
+  const rd=await dbGet('roulette'); if(!rd||Date.now()<rd.next) return;
   const spin=Math.floor(Math.random()*38);
   const result=spin===37?-1:spin;
   const myBet=rd.bets?.[S.uid];
-  if(myBet) {
+  if(myBet){
+    // ★修正②: 必ずDBから最新値を取得してから加算（不正値防止）
     const p=await dbGet(`players/${S.uid}`); if(!p) return;
     let win=0;
     for(const[t,a] of Object.entries(myBet.bets||{})) win+=calcWin(t,result,a);
     win=r(win);
+    const debit=r(myBet.amount);
     const upd={
       coins:       r((p.coins||0)+win),
-      rouletteBet: Math.max(0,r((p.rouletteBet||0)-r(myBet.amount))),
+      rouletteBet: Math.max(0, r((p.rouletteBet||0)-debit)),
     };
     await dbUpdate(`players/${S.uid}`,upd);
     await dbSet(`roulette/bets/${S.uid}`,null);
     await pushMeta({...p,...upd});
     const disp=result===-1?'00':result;
-    toast(win>0?`🎰 ルーレット: ${disp} → +${fmt(win)} COIN獲得！`:`🎰 ルーレット: ${disp} — 残念...`,5000);
+    toast(win>0?`🎰 ルーレット: ${disp} → +${fmt(win)} COIN獲得！`:`🎰 ルーレット: ${disp} — 残念...`, 5000);
   }
   if((rd.next||0)<=Date.now())
     await dbUpdate('roulette',{next:Date.now()+3600000, last:result});
@@ -827,7 +759,7 @@ async function checkRoulette() {
 async function checkStocks() {
   const stocks=S.stocks; if(!Object.keys(stocks).length) return;
   const p=S.players[S.uid]; if(!p) return;
-  for(const[sym,s] of Object.entries(stocks)) {
+  for(const[sym,s] of Object.entries(stocks)){
     if(Date.now()<(s.nextUpdate||0)) continue;
     const held=p.holdings?.[sym]||0;
     const asset=r(p.coins||0)+r(p.deposit?.principal||0)+r(p.termDeposit?.principal||0);
@@ -842,31 +774,31 @@ async function checkStocks() {
 }
 
 // ======================================================
-//  公開 API (W.*)
+//  公開API (W.*)
 // ======================================================
 window.W = {
 
-  // ---- 内部ヘルパー（テンプレートから呼ばれる） ----
-  _setMode(m)  { S.lmode=m; S.lerr=''; renderLogin(); },
-  _setTab(t)   { S.tab=t; renderMain(); },
+  _setMode(m)   { S.lmode=m; S.lerr=''; renderLogin(); },
+  _setTab(t)    { S.tab=t; scheduleRender(); },
+  _clearBets()  { S.rbets={}; const p=S.players[S.uid]; if(p) renderPanel(p); },
   _toggleBet(type) {
     const amtEl=document.getElementById('bet-amt');
     const amt=Math.max(1,r(parseFloat(amtEl?.value)||1));
     if(S.rbets[type]) delete S.rbets[type]; else S.rbets[type]=amt;
     const p=S.players[S.uid]; if(p) renderPanel(p);
   },
-  _clearBets() { S.rbets={}; const p=S.players[S.uid]; if(p) renderPanel(p); },
-  _setTicketAmt(kind,n) {
+  // クイックボタンで枚数欄に値をセットするだけ（DOMを再生成しない）
+  _quickTicket(kind,n) {
     const id=kind==='n'?'conv-n':'conv-r';
     const el=document.getElementById(id);
-    if(el){ el.value=n; el.focus(); }
+    if(el){ el.value=String(n); }
   },
 
-  // ---- ログイン / ログアウト ----
+  // ---- ログイン ----
   async login() {
-    const email = document.getElementById('l-email')?.value.trim();
-    const pass  = document.getElementById('l-pass')?.value.trim();
-    const name  = document.getElementById('l-name')?.value.trim();
+    const email=document.getElementById('l-email')?.value.trim();
+    const pass =document.getElementById('l-pass')?.value.trim();
+    const name =document.getElementById('l-name')?.value.trim();
     if(!email||!pass){ S.lerr='メールアドレスとパスワードを入力してください'; renderLogin(); return; }
     if(S.lmode==='register'&&!name){ S.lerr='プレイヤー名を入力してください'; renderLogin(); return; }
     try {
@@ -884,7 +816,7 @@ window.W = {
         toast('ログインしました');
       }
       S.lerr=''; S.tab='home';
-    } catch(e) {
+    } catch(e){
       const msgs={
         'auth/email-already-in-use':  'そのメールは既に登録されています',
         'auth/invalid-email':         'メールアドレスの形式が正しくありません',
@@ -900,28 +832,37 @@ window.W = {
   async logout() {
     await signOut(auth);
     S.uid=null; S.pname=''; S.tab='home'; mainRendered=false;
-    Object.keys(unsubs).forEach(k=>{ if(unsubs[k]) unsubs[k]=null; });
+    Object.keys(unsubs).forEach(k=>{ unsubs[k]=null; });
     renderLogin();
   },
 
-  // ---- チケット ----
+  // ---- チケット変換 ----
+  // ★修正②: DBから最新値を取得 → 差分のみ加算（不正値防止）
   async useTicket(type) {
     const p=await dbGet(`players/${S.uid}`); if(!p) return;
     if(type==='normal'){
-      const n=Math.max(1,Math.min(r(parseFloat(document.getElementById('conv-n')?.value)||1),p.tickets||0));
-      if((p.tickets||0)<1){toast('チケットがありません');return;}
-      const upd={tickets:(p.tickets||0)-n, coins:r((p.coins||0)+n)};
-      await dbUpdate(`players/${S.uid}`,upd);
-      await pushMeta({...p,...upd});
-      toast(`+${fmt(n)} COIN獲得！（チケット${n}枚使用）`);
+      const maxN=p.tickets||0;
+      if(maxN<1){ toast('チケットがありません'); return; }
+      const n=Math.max(1,Math.min(r(parseFloat(document.getElementById('conv-n')?.value)||1),maxN));
+      const gain=n; // 1枚=1COIN（固定）
+      await dbUpdate(`players/${S.uid}`,{
+        tickets: maxN-n,
+        coins:   r((p.coins||0)+gain),
+      });
+      await pushMeta({...p, tickets:maxN-n, coins:r((p.coins||0)+gain)});
+      toast(`+${fmt(gain)} COIN獲得！（チケット${n}枚使用）`);
     } else {
-      const n=Math.max(1,Math.min(r(parseFloat(document.getElementById('conv-r')?.value)||1),p.rareTickets||0));
-      if((p.rareTickets||0)<1){toast('レアチケットがありません');return;}
+      const maxR=p.rareTickets||0;
+      if(maxR<1){ toast('レアチケットがありません'); return; }
+      const n=Math.max(1,Math.min(r(parseFloat(document.getElementById('conv-r')?.value)||1),maxR));
+      // ★ 1枚ずつ独立した乱数で1〜10を決定
       let gain=0;
       for(let i=0;i<n;i++) gain+=Math.floor(Math.random()*10)+1;
-      const upd={rareTickets:(p.rareTickets||0)-n, coins:r((p.coins||0)+gain)};
-      await dbUpdate(`players/${S.uid}`,upd);
-      await pushMeta({...p,...upd});
+      await dbUpdate(`players/${S.uid}`,{
+        rareTickets: maxR-n,
+        coins:       r((p.coins||0)+gain),
+      });
+      await pushMeta({...p, rareTickets:maxR-n, coins:r((p.coins||0)+gain)});
       toast(`★ レアチケット${n}枚使用！ +${fmt(gain)} COIN！`);
     }
   },
@@ -929,10 +870,12 @@ window.W = {
   // ---- 普通預金 ----
   async doDeposit() {
     const amt=r(parseFloat(document.getElementById('dep-in')?.value)||0);
-    if(amt<=0){toast('金額を入力してください');return;}
+    if(amt<=0){ toast('金額を入力してください'); return; }
+    // ★修正②: DBから最新のcoinsを取得して検証
     const p=await dbGet(`players/${S.uid}`);
-    if(amt>r(p.coins||0)){toast('COINが不足しています');return;}
-    const upd={coins:r((p.coins||0)-amt),deposit:{principal:amt,since:Date.now()},depositBalance:amt};
+    const currentCoins=r(p.coins||0);
+    if(amt>currentCoins){ toast('COINが不足しています'); return; }
+    const upd={coins:currentCoins-amt, deposit:{principal:amt,since:Date.now()}, depositBalance:amt};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(`${fmt(amt)} COINを預金しました`);
@@ -940,13 +883,14 @@ window.W = {
 
   async addDeposit() {
     const amt=r(parseFloat(document.getElementById('dep-add')?.value)||0);
-    if(amt<=0){toast('金額を入力してください');return;}
+    if(amt<=0){ toast('金額を入力してください'); return; }
     const p=await dbGet(`players/${S.uid}`);
-    if(amt>r(p.coins||0)){toast('COINが不足しています');return;}
+    const currentCoins=r(p.coins||0);
+    if(amt>currentCoins){ toast('COINが不足しています'); return; }
     const now=Date.now();
     const curBal=r(p.deposit.principal*Math.pow(1.01,(now-p.deposit.since)/86400000));
     const np=r(curBal+amt);
-    const upd={coins:r((p.coins||0)-amt),deposit:{principal:np,since:now},depositBalance:np};
+    const upd={coins:currentCoins-amt, deposit:{principal:np,since:now}, depositBalance:np};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(`${fmt(amt)} COINを追加預金しました`);
@@ -955,7 +899,7 @@ window.W = {
   async withdrawDeposit() {
     const p=await dbGet(`players/${S.uid}`); if(!p?.deposit) return;
     const bal=r(p.deposit.principal*Math.pow(1.01,(Date.now()-p.deposit.since)/86400000));
-    const upd={coins:r((p.coins||0)+bal),deposit:null,depositBalance:0};
+    const upd={coins:r((p.coins||0)+bal), deposit:null, depositBalance:0};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(`${fmt(bal)} COINを引き出しました`);
@@ -965,12 +909,13 @@ window.W = {
   async doTermDeposit() {
     const amt =r(parseFloat(document.getElementById('tdep-in')?.value)||0);
     const days=parseInt(document.getElementById('tdep-days')?.value)||7;
-    if(amt<=0){toast('金額を入力してください');return;}
-    if(days<7){toast('7日以上を指定してください');return;}
+    if(amt<=0){ toast('金額を入力してください'); return; }
+    if(days<7){ toast('7日以上を指定してください'); return; }
     const p=await dbGet(`players/${S.uid}`);
-    if(p.termDeposit?.principal>0){toast('既に定期預金があります');return;}
-    if(amt>r(p.coins||0)){toast('COINが不足しています');return;}
-    const upd={coins:r((p.coins||0)-amt),termDeposit:{principal:amt,since:Date.now(),days},termDepositBalance:amt};
+    if(p.termDeposit?.principal>0){ toast('既に定期預金があります'); return; }
+    const currentCoins=r(p.coins||0);
+    if(amt>currentCoins){ toast('COINが不足しています'); return; }
+    const upd={coins:currentCoins-amt, termDeposit:{principal:amt,since:Date.now(),days}, termDepositBalance:amt};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(`${fmt(amt)} COINを${days}日間定期預金しました`);
@@ -981,7 +926,7 @@ window.W = {
     const elapsed=(Date.now()-p.termDeposit.since)/86400000;
     const matured=elapsed>=p.termDeposit.days;
     const ret=matured?r(p.termDeposit.principal*Math.pow(1.02,elapsed)):r(p.termDeposit.principal);
-    const upd={coins:r((p.coins||0)+ret),termDeposit:null,termDepositBalance:0};
+    const upd={coins:r((p.coins||0)+ret), termDeposit:null, termDepositBalance:0};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(matured?`定期満期！ ${fmt(ret)} COIN返還`:`期限前解約。元本 ${fmt(ret)} COIN返還`);
@@ -990,9 +935,10 @@ window.W = {
   // ---- ルーレット ----
   async placeBet() {
     const total=r(Object.values(S.rbets).reduce((a,b)=>a+b,0));
-    if(total<=0){toast('賭け箇所を選んでください');return;}
+    if(total<=0){ toast('賭け箇所を選んでください'); return; }
     const p=await dbGet(`players/${S.uid}`);
-    if(total>r(p.coins||0)){toast('COINが不足しています');return;}
+    const currentCoins=r(p.coins||0);
+    if(total>currentCoins){ toast('COINが不足しています'); return; }
     const rd=await dbGet('roulette')||{next:Date.now()+3600000,bets:{}};
     const ex=rd.bets?.[S.uid];
     let nb,na;
@@ -1004,7 +950,7 @@ window.W = {
       nb={...S.rbets}; na=total;
     }
     await dbSet(`roulette/bets/${S.uid}`,{playerId:S.uid,bets:nb,amount:na});
-    const upd={coins:r((p.coins||0)-total),rouletteBet:r((p.rouletteBet||0)+total)};
+    const upd={coins:currentCoins-total, rouletteBet:r((p.rouletteBet||0)+total)};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     S.rbets={};
@@ -1014,14 +960,15 @@ window.W = {
   // ---- 投資 ----
   async buyStock(sym) {
     const qty=r(parseFloat(document.getElementById('buy-'+sym)?.value)||0);
-    if(qty<=0){toast('株数を入力してください');return;}
+    if(qty<=0){ toast('株数を入力してください'); return; }
     const s=S.stocks[sym]; if(!s) return;
     const cost=r(s.price*qty);
     const p=await dbGet(`players/${S.uid}`);
-    if(cost>r(p.coins||0)){toast('COINが不足しています');return;}
+    const currentCoins=r(p.coins||0);
+    if(cost>currentCoins){ toast('COINが不足しています'); return; }
     const holdings={...(p.holdings||{})};
     holdings[sym]=r((holdings[sym]||0)+qty);
-    const upd={coins:r((p.coins||0)-cost),holdings,investedCost:r((p.investedCost||0)+cost)};
+    const upd={coins:currentCoins-cost, holdings, investedCost:r((p.investedCost||0)+cost)};
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
     toast(`${sym} ${qty}株を購入 (-${fmt(cost)} COIN)`);
@@ -1029,9 +976,9 @@ window.W = {
 
   async sellStock(sym) {
     const qty=r(parseFloat(document.getElementById('sell-'+sym)?.value)||0);
-    if(qty<=0){toast('株数を入力してください');return;}
+    if(qty<=0){ toast('株数を入力してください'); return; }
     const p=await dbGet(`players/${S.uid}`);
-    if((p.holdings?.[sym]||0)<qty){toast('保有数が不足しています');return;}
+    if((p.holdings?.[sym]||0)<qty){ toast('保有数が不足しています'); return; }
     const s=S.stocks[sym]; if(!s) return;
     const rev=r(s.price*qty);
     const totalHeld=Object.values(p.holdings||{}).reduce((a,b)=>a+b,0);
@@ -1039,8 +986,9 @@ window.W = {
     const holdings={...(p.holdings||{})};
     holdings[sym]=r((holdings[sym]||0)-qty);
     const upd={
-      coins:r((p.coins||0)+rev), holdings,
-      investedCost:Math.max(0,r((p.investedCost||0)-r(avgCost*qty))),
+      coins:        r((p.coins||0)+rev),
+      holdings,
+      investedCost: Math.max(0,r((p.investedCost||0)-r(avgCost*qty))),
     };
     await dbUpdate(`players/${S.uid}`,upd);
     await pushMeta({...p,...upd});
@@ -1048,27 +996,34 @@ window.W = {
   },
 };
 
-// ---- 起動 ----
+// ======================================================
+//  起動
+// ======================================================
 async function main() {
-  await ensureDefaults();
+  renderLogin(); // まずログイン画面を表示（DBアクセスなし）
+
   onAuthStateChanged(auth, async user => {
-    if(user){
+    if (user) {
       S.uid=user.uid;
+      // ログイン後にのみDBアクセス
+      await ensureDefaults();
       const p=await dbGet(`players/${S.uid}`);
       if(p){ S.pname=p.name; await pushMeta(p); }
       subscribeAll(S.uid);
+      S.tab='home';
     } else {
       S.uid=null; S.pname=''; mainRendered=false;
       renderLogin();
     }
   });
-  // 毎秒タイマー（表示更新のみ、フォーカス中はパネル再描画しない）
-  setInterval(()=>{ S.now=Date.now(); if(S.uid){ const p=S.players[S.uid]; if(p) renderMain(); } }, 1000);
-  // 10秒ごとのサーバー処理
+
+  // 毎秒: 数値表示のみ更新（DOM再生成なし・入力欄に触れない）
+  setInterval(updateMetricsOnly, 1000);
+  // 10秒ごと: チケット付与・ルーレット・株価チェック
   setInterval(periodicCheck, 10000);
 }
 
-main().catch(e=>{
+main().catch(e => {
   console.error(e);
   document.getElementById('app').innerHTML=
     `<div style="padding:40px;font-family:system-ui;color:#c0392b">
