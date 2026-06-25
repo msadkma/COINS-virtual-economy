@@ -23,7 +23,7 @@ export const FIREBASE_CONFIG = {
 };
 
 // ★ PHP APIのベースURL（InfinityFree等のURL）
-export const API_BASE = "https://if0_42264124.infinityfreeapp.com/api";
+export const API_BASE = "https://coins.42web.io/api";
 // ============================================================
 
 export const app  = initializeApp(FIREBASE_CONFIG);
