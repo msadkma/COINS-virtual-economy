@@ -3,7 +3,7 @@
 // ============================================================
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, get, set, onValue, off }
+import { getDatabase, ref, get, set, update, onValue, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -12,18 +12,18 @@ import { getAuth }
 //  ★ ここに Firebase の設定を貼り付けてください ★
 // ============================================================
 export const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyAoldTnCCTDdIGMA_Q3zeEf8fNGmZWPo7g",
-    authDomain: "unreal-economic-platform.firebaseapp.com",
-    databaseURL: "https://unreal-economic-platform-default-rtdb.firebaseio.com",
-    projectId: "unreal-economic-platform",
-    storageBucket: "unreal-economic-platform.firebasestorage.app",
-    messagingSenderId: "169831544038",
-    appId: "1:169831544038:web:04e3d06b74be5df7057727",
-    measurementId: "G-TZ6F7Y6RDD"
+  apiKey: "AIzaSyAoldTnCCTDdIGMA_Q3zeEf8fNGmZWPo7g",
+  authDomain: "unreal-economic-platform.firebaseapp.com",
+  databaseURL: "https://unreal-economic-platform-default-rtdb.firebaseio.com",
+  projectId: "unreal-economic-platform",
+  storageBucket: "unreal-economic-platform.firebasestorage.app",
+  messagingSenderId: "169831544038",
+  appId: "1:169831544038:web:04e3d06b74be5df7057727",
+  measurementId: "G-TZ6F7Y6RDD"
 };
 
 // ★ PHP APIのベースURL（InfinityFree等のURL）
-export const API_BASE = "https://coins.42web.io.infinityfreeapp.com";
+export const API_BASE = "https://coins.42web.io/api";
 // ============================================================
 
 export const app  = initializeApp(FIREBASE_CONFIG);
@@ -35,7 +35,8 @@ export const dbGet = async p => {
   const s = await get(ref(db, p));
   return s.exists() ? s.val() : null;
 };
-export const dbSet = (p, v) => set(ref(db, p), v);
+export const dbSet    = (p, v) => set(ref(db, p), v);
+export const dbUpdate = (p, v) => update(ref(db, p), v);
 
 // ---- PHP API呼び出し ----
 export async function callApi(endpoint, body = {}) {
