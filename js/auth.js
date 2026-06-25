@@ -1,12 +1,28 @@
 // ============================================================
 //  js/auth.js  ログイン・ログアウト・新規登録
 // ============================================================
-import { auth, dbGet, dbSet, callApi, toast } from './firebase.js';
-import { getAuth, createUserWithEmailAndPassword,
-         signInWithEmailAndPassword, signOut, onAuthStateChanged }
+import { auth, dbGet, dbSet, dbUpdate, rankTotal, toast } from './firebase.js';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword,
+         signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { S, scheduleRender, resetMain } from './ui.js';
-import { subscribeAll } from './firebase.js';
+
+// ---- playersMeta更新 ----
+export async function pushMeta(p) {
+  if (!S.uid) return;
+  await dbUpdate(`playersMeta/${S.uid}`, {
+    name:      p.name || S.pname,
+    rankTotal: rankTotal(p),
+    holdings:  p.holdings || {},
+    detail: {
+      coins: Math.round(p.coins       || 0),
+      dep:   Math.round(p.deposit?.principal     || 0),
+      tdep:  Math.round(p.termDeposit?.principal || 0),
+      rbet:  Math.round(p.rouletteBet  || 0),
+      inv:   Math.round(p.investedCost || 0),
+    },
+  });
+}
 
 // ---- ログイン画面レンダリング ----
 export function renderLogin() {
@@ -16,8 +32,10 @@ export function renderLogin() {
       <div class="login-title">🏛 架空市場</div>
       <div class="login-sub">仮想経済マルチプレイヤーゲーム</div>
       <div class="mode-btns">
-        <button class="mode-btn ${S.lmode==='login'?'active':''}" onclick="W._setMode('login')">ログイン</button>
-        <button class="mode-btn ${S.lmode==='register'?'active':''}" onclick="W._setMode('register')">新規登録</button>
+        <button class="mode-btn ${S.lmode==='login'?'active':''}"
+                onclick="W._setMode('login')">ログイン</button>
+        <button class="mode-btn ${S.lmode==='register'?'active':''}"
+                onclick="W._setMode('register')">新規登録</button>
       </div>
       ${S.lmode==='register' ? `<div class="form-group">
         <label class="form-label">プレイヤー名（ゲーム内表示名）</label>
@@ -36,7 +54,8 @@ export function renderLogin() {
                style="width:100%" onkeydown="if(event.key==='Enter')W.login()"/>
       </div>
       ${S.lerr ? `<div class="err">${S.lerr}</div>` : ''}
-      <button class="btn btn-primary" style="width:100%;margin-top:14px;padding:10px"
+      <button class="btn btn-primary"
+              style="width:100%;margin-top:14px;padding:10px"
               onclick="W.login()">
         ${S.lmode==='login' ? 'ログイン' : '登録してプレイ開始'}
       </button>
@@ -47,13 +66,20 @@ export function renderLogin() {
     </div></div>`;
 }
 
-// ---- ログイン・登録 ----
+// ---- ログイン・新規登録 ----
 export async function login() {
   const email = document.getElementById('l-email')?.value.trim();
   const pass  = document.getElementById('l-pass')?.value.trim();
   const name  = document.getElementById('l-name')?.value.trim();
-  if (!email || !pass) { S.lerr = 'メールアドレスとパスワードを入力してください'; renderLogin(); return; }
-  if (S.lmode === 'register' && !name) { S.lerr = 'プレイヤー名を入力してください'; renderLogin(); return; }
+
+  if (!email || !pass) {
+    S.lerr = 'メールアドレスとパスワードを入力してください';
+    renderLogin(); return;
+  }
+  if (S.lmode === 'register' && !name) {
+    S.lerr = 'プレイヤー名を入力してください';
+    renderLogin(); return;
+  }
 
   S.submitting = true;
   try {
@@ -63,24 +89,29 @@ export async function login() {
       const now  = Date.now();
       const np   = {
         id: uid, name, coins: 0, tickets: 0, rareTickets: 0,
-        lastTicketTime: now, deposit: null, depositBalance: 0,
+        lastTicketTime: now,
+        deposit: null, depositBalance: 0,
         termDeposit: null, termDepositBalance: 0,
         rouletteBet: 0, holdings: {}, investedCost: 0, lastDailyBonus: 0,
       };
-      // onAuthStateChanged で認証完了を待ってからDB書き込み
+      // 認証トークンが有効になるまで待機してからDB書き込み
       await new Promise(resolve => {
         const unsub = onAuthStateChanged(auth, user => {
           if (user && user.uid === uid) { unsub(); resolve(); }
         });
       });
       await dbSet(`players/${uid}`, np);
+      S.uid = uid;
       await pushMeta(np);
       toast(`ようこそ、${name}さん！`);
     } else {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      S.uid = cred.user.uid;
       toast('ログインしました');
     }
-    S.lerr = ''; S.tab = 'home';
+    S.lerr = '';
+    S.tab  = 'home';
+    // onAuthStateChanged が発火するので scheduleRender は不要
   } catch(e) {
     const msgs = {
       'auth/email-already-in-use':  'そのメールは既に登録されています',
@@ -103,26 +134,7 @@ export async function logout() {
   renderLogin();
 }
 
-// ---- playersMeta更新 ----
-export async function pushMeta(p) {
-  if (!S.uid) return;
-  const { rankTotal } = await import('./firebase.js');
-  const { dbUpdate }  = await import('./firebase.js');
-  await dbUpdate(`playersMeta/${S.uid}`, {
-    name:      p.name || S.pname,
-    rankTotal: rankTotal(p),
-    holdings:  p.holdings || {},
-    detail: {
-      coins: Math.round(p.coins||0),
-      dep:   p.deposit?.principal     ? Math.round(p.deposit.principal)     : 0,
-      tdep:  p.termDeposit?.principal ? Math.round(p.termDeposit.principal) : 0,
-      rbet:  Math.round(p.rouletteBet||0),
-      inv:   Math.round(p.investedCost||0),
-    },
-  });
-}
-
-// ---- onAuthStateChanged 初期化 ----
+// ---- 認証状態の監視 ----
 export function initAuth(onLogin, onLogout) {
   onAuthStateChanged(auth, async user => {
     if (user) {
