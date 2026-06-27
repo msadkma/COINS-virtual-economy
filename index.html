@@ -268,30 +268,38 @@ async function periodicCheck() {
   }
 }
 
-// ---- 1位補正ボーナス ----
+// ---- 1位補正ボーナス（計算式修正・経営者バフ適用） ----
 async function checkFirstBonus() {
   const p = await dbGet(`players/${S.uid}`); if (!p) return;
-  const now = Date.now();
   const todayMid = new Date(); todayMid.setHours(0,0,0,0);
-  if ((p.lastFirstBonus||0) >= todayMid.getTime()) return; // 今日はもう受け取り済み
+  if ((p.lastFirstBonus||0) >= todayMid.getTime()) return;
 
-  const meta  = S.playersMeta;
-  const rows  = Object.values(meta).sort((a,b)=>(b.rankTotal||0)-(a.rankTotal||0));
-  if (rows.length < 2) return; // 自分しかいない場合はスキップ
+  const meta = S.playersMeta;
+  const rows = Object.values(meta).sort((a,b)=>(b.rankTotal||0)-(a.rankTotal||0));
+  if (rows.length < 2) return;
   const first = rows[0].rankTotal || 0;
-  const myRt  = rows.find(m => m.name === (p.name||S.pname))?.rankTotal
-             || Math.round((p.coins||0)+(p.deposit?.principal||0)
-                          +(p.termDeposit?.principal||0)+(p.rouletteBet||0)+(p.investedCost||0));
-  if (myRt >= first) return; // 自分が1位の場合はスキップ
+  const myRt  = Math.round(
+    (p.coins||0)+(p.deposit?.principal||0)
+   +(p.termDeposit?.principal||0)+(p.rouletteBet||0)+(p.investedCost||0)
+  );
+  if (myRt >= first) return; // 1位の場合はスキップ
 
-  // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
-  const bonus = Math.floor(((first/(myRt+1) - 1)/100 + 1) * myRt);
+  // 修正後の計算式:
+  // base = floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
+  // 補正額 = base - 自分資産
+  const base  = Math.floor(((first/(myRt+1) - 1)/100 + 1) * myRt);
+  let   bonus = base - myRt;
   if (bonus <= 0) return;
 
-  await dbSet(`players/${S.uid}/lastFirstBonus`, todayMid.getTime());
-  await dbSet(`players/${S.uid}/coins`,
-    Math.round((p.coins||0) + bonus));
-  toast(`👑 1位補正ボーナス +${bonus} COIN！`, 5000);
+  // 経営者バフ: 補正COINを2倍
+  if (p.trait === 'manager') bonus = bonus * 2;
+
+  await dbUpdate(`players/${S.uid}`, {
+    coins:          Math.round((p.coins||0) + bonus),
+    lastFirstBonus: todayMid.getTime(),
+  });
+  const managerNote = p.trait === 'manager' ? '（経営者バフ×2）' : '';
+  toast(`👑 1位補正ボーナス +${bonus} COIN！${managerNote}`, 5000);
 }
 
 // ---- 公開API ----
