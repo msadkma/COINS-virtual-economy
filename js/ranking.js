@@ -18,7 +18,7 @@ export function buildRanking(S) {
   const first   = rows[0]?.rt || 0; // 1位の資産
 
   // 1位補正ボーナス計算
-  // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
+  // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100) * 自分資産 )
   function calcFirstBonus(myRt) {
     if (first <= 0 || myRt >= first) return 0;
     return Math.floor(((first / (myRt + 1) - 1) / 100) * myRt);
