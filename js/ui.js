@@ -1,7 +1,7 @@
 // ============================================================
 //  js/ui.js  レンダリング管理・共通UI
 // ============================================================
-import { fmt, esc, r, calcInterest, rankTotal, calcBetLimit,
+import { fmt, esc, r, calcInterest, calcInterestWithTrait, rankTotal, calcBetLimit,
          currentBetUsage, avgAsset, calcTicketInterval, calcRareProb,
          totalAssetsAll, isRed, WHEEL_ORDER } from './firebase.js';
 import { buildRoulette } from './roulette.js';
@@ -92,7 +92,7 @@ export function updateMetricsOnly() {
   const elapsed  = S.now - (p.lastTicketTime||S.now);
   const secLeft  = Math.ceil(Math.max(0, interval - elapsed%interval) / 1000);
   const totalT   = (p.tickets||0) + (p.rareTickets||0);
-  const {depBal, tdepBal} = calcInterest(p);
+  const {depBal, tdepBal} = calcInterestWithTrait(p);
   let invVal = 0;
   for (const [sym,qty] of Object.entries(p.holdings||{}))
     if (S.stocks[sym]) invVal += S.stocks[sym].price*(qty||0);
@@ -128,7 +128,7 @@ function buildHome(p) {
   const elapsed  = now - (p.lastTicketTime||now);
   const secLeft  = Math.ceil(Math.max(0, interval - elapsed%interval) / 1000);
   const totalT   = (p.tickets||0) + (p.rareTickets||0);
-  const {depBal, tdepBal} = calcInterest(p);
+  const {depBal, tdepBal} = calcInterestWithTrait(p); // 会計士バフ適用
   let invVal = 0;
   for (const [sym,qty] of Object.entries(p.holdings||{}))
     if (S.stocks[sym]) invVal += S.stocks[sym].price*(qty||0);
@@ -151,13 +151,13 @@ function buildHome(p) {
   const hToMid     = Math.floor(sToMid/3600);
   const mToMid     = Math.floor((sToMid%3600)/60);
 
-  // 特性アイコン
+  // 特性情報（バフ説明付き）
   const traitMap = {
-    worker:    { label:'仕事人',  color:'#e74c3c', icon:'⚒' },
-    manager:   { label:'経営者',  color:'#2980b9', icon:'👔' },
-    negotiator:{ label:'交渉者',  color:'#f39c12', icon:'🤝' },
-    balancer:  { label:'バランサー',color:'#27ae60',icon:'⚖' },
-    accountant:{ label:'会計士',  color:'#8e44ad', icon:'📊' },
+    worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%' },
+    manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'補正COINを2倍受け取る' },
+    negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への影響力が2倍' },
+    balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率が常に20%' },
+    accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金・定期預金の利率が20%アップ' },
   };
   const trait    = p.trait || null;
   const traitInfo= trait ? traitMap[trait] : null;
