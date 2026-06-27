@@ -21,7 +21,7 @@ export function buildRanking(S) {
   // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
   function calcFirstBonus(myRt) {
     if (first <= 0 || myRt >= first) return 0;
-    return Math.floor(((first / (myRt + 1) - 1) / 100 + 1) * myRt);
+    return Math.floor(((first / (myRt + 1) - 1) / 100) * myRt);
   }
 
   let html = `
