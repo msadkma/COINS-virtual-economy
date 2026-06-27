@@ -3,7 +3,6 @@
 // ============================================================
 import { callApi, toast } from './firebase.js';
 import { S, withSubmit } from './ui.js';
-import { pushMeta } from './auth.js';
 
 export async function useTicket(type) {
   await withSubmit(async () => {
