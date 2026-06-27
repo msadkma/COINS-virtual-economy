@@ -3,62 +3,56 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏛 架空市場</title>
+<title>🏛 COINS架空市場</title>
+<!-- DIN Condensed フォント（数値用） -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DIN+Condensed:wght@700&display=swap" rel="stylesheet">
-<!--
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  【ファイル構成】
-  fictional_market/
-  ├── index.html          ← このファイル
-  ├── js/
-  │   ├── firebase.js     Firebase初期化・共通関数
-  │   ├── auth.js         ログイン・ログアウト
-  │   ├── ui.js           レンダリング・ホーム・預金UI
-  │   ├── tickets.js      チケット変換
-  │   ├── deposit.js      預金・定期預金
-  │   ├── roulette.js     ルーレット
-  │   ├── invest.js       投資
-  │   └── ranking.js      ランキング
-  └── api/                PHPバックエンド（別サーバーにアップロード）
-      ├── config.php
-      ├── middleware.php
-      ├── ticket.php
-      ├── deposit.php
-      ├── roulette.php
-      ├── invest.php
-      └── bonus.php
-
-  【セットアップ手順】
-  1. js/firebase.js の FIREBASE_CONFIG と API_BASE を設定
-  2. api/config.php の各設定値を入力
-  3. api/ フォルダを PHP対応ホスティングにアップロード
-  4. Firebaseコンソールでルールを設定（middleware.php 参照）
-  5. このフォルダをGitHub Pagesで公開
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DIN+Condensed:wght@700&display=swap"
+      rel="stylesheet">
 <style>
+/* ---- リセット ---- */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;font-size:14px;background:#f5f4f1;color:#1a1a1a;min-height:100vh}
+body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
+     font-size:14px;background:#f5f4f1;color:#1a1a1a;min-height:100vh}
+
+/* ---- DIN Condensed を数値に適用 ---- */
 .din{font-family:'DIN Condensed',system-ui,sans-serif;font-weight:700;letter-spacing:.5px}
+
 #app{min-height:100vh}
-.header{background:#fff;border-bottom:1px solid #e0ddd8;padding:10px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
-.logo{font-weight:800;font-size:16px}
+
+/* ---- ヘッダー ---- */
+.header{background:#fff;border-bottom:1px solid #e0ddd8;padding:10px 16px;
+        display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.logo{font-weight:800;font-size:15px}
 .spacer{flex:1}
-.tab-bar{display:flex;background:#fff;border-bottom:1px solid #e0ddd8;overflow-x:auto;scrollbar-width:none}
+
+/* ---- タブ ---- */
+.tab-bar{display:flex;background:#fff;border-bottom:1px solid #e0ddd8;
+         overflow-x:auto;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab{padding:10px 13px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2.5px solid transparent;white-space:nowrap;font-family:inherit;transition:all .15s}
+.tab{padding:10px 13px;border:none;background:none;cursor:pointer;font-size:13px;
+     color:#666;border-bottom:2.5px solid transparent;white-space:nowrap;
+     font-family:inherit;transition:all .15s}
 .tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:700}
 .tab:hover:not(.active){background:#f5f4f1;color:#1a1a1a}
 .panel{padding:14px;max-width:680px;margin:0 auto}
-.card{background:#fff;border:1px solid #e0ddd8;border-radius:10px;padding:14px 16px;margin-bottom:12px}
+
+/* ---- カード ---- */
+.card{background:#fff;border:1px solid #e0ddd8;border-radius:10px;
+      padding:14px 16px;margin-bottom:12px}
 .card-title{font-weight:700;font-size:14px;margin-bottom:10px}
+
+/* ---- メトリクス ---- */
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 .metric{background:#fff;border:1px solid #e0ddd8;border-radius:8px;padding:10px;text-align:center}
 .ml{font-size:11px;color:#888;margin-bottom:3px}
 .mv{font-size:22px;font-weight:700}
 .mu{font-size:11px;color:#888;font-weight:400;font-family:system-ui}
-.btn{padding:7px 14px;border:1px solid #ccc;border-radius:7px;background:#fff;cursor:pointer;font-size:13px;color:#1a1a1a;font-family:inherit;transition:all .15s;white-space:nowrap}
+
+/* ---- ボタン ---- */
+.btn{padding:7px 14px;border:1px solid #ccc;border-radius:7px;background:#fff;
+     cursor:pointer;font-size:13px;color:#1a1a1a;font-family:inherit;
+     transition:all .15s;white-space:nowrap}
 .btn:hover:not(:disabled){background:#f0ede8}
 .btn:active:not(:disabled){transform:scale(.98)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -69,67 +63,120 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;font-size:1
 .btn-danger:hover:not(:disabled){background:#fff5f5}
 .btn-gold{border-color:#b8860b;color:#6b4c00;background:#fffbf0}
 .btn-gold:hover:not(:disabled){background:#fff0c0}
-.input{padding:7px 10px;border:1px solid #ccc;border-radius:7px;background:#fff;color:#1a1a1a;font-size:13px;font-family:inherit}
+
+/* ---- 入力 ---- */
+.input{padding:7px 10px;border:1px solid #ccc;border-radius:7px;
+       background:#fff;color:#1a1a1a;font-size:13px;font-family:inherit}
 .input:focus{outline:2px solid #1a1a1a;outline-offset:1px}
+
+/* ---- レイアウト ---- */
 .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .hint{font-size:12px;color:#888}
 .hint-label{font-size:13px;color:#555}
+
+/* ---- バッジ ---- */
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-.badge-dark{background:#1a1a1a;color:#fff}
-.badge-blue{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.badge-green{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
-.badge-red{background:#fff0f0;color:#991b1b;border:1px solid #fecaca}
+.badge-dark  {background:#1a1a1a;color:#fff}
+.badge-blue  {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.badge-green {background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.badge-red   {background:#fff0f0;color:#991b1b;border:1px solid #fecaca}
 .badge-purple{background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff}
-.badge-gold{background:#fffbf0;color:#7a5c00;border:1px solid #d4a800}
+.badge-gold  {background:#fffbf0;color:#7a5c00;border:1px solid #d4a800}
 .badge-orange{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
-.progress-bar{height:5px;background:#e5e3de;border-radius:3px;overflow:hidden}
+
+/* ---- プログレス ---- */
+.progress-bar {height:5px;background:#e5e3de;border-radius:3px;overflow:hidden}
 .progress-fill{height:100%;background:#1a1a1a;transition:width 1s linear}
-.err{color:#c0392b;font-size:12px;margin-top:6px;padding:6px 10px;background:#fff0f0;border-radius:6px;border:1px solid #fecaca}
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-card{background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:28px;width:100%;max-width:340px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.limit-bar    {height:8px;background:#e5e3de;border-radius:4px;overflow:hidden;margin-top:6px}
+.limit-fill   {height:100%;border-radius:4px;transition:width .3s}
+
+/* ---- フォーム ---- */
+.err{color:#c0392b;font-size:12px;margin-top:6px;padding:6px 10px;
+     background:#fff0f0;border-radius:6px;border:1px solid #fecaca}
+.login-wrap {display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-card {background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:28px;
+             width:100%;max-width:340px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .login-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:4px}
-.login-sub{font-size:12px;color:#888;text-align:center;margin-bottom:20px}
-.mode-btns{display:flex;border:1px solid #ccc;border-radius:7px;overflow:hidden;margin-bottom:18px}
-.mode-btn{flex:1;padding:9px;border:none;background:#fff;cursor:pointer;font-size:13px;color:#666;font-family:inherit;transition:all .15s}
+.login-sub  {font-size:12px;color:#888;text-align:center;margin-bottom:20px}
+.mode-btns  {display:flex;border:1px solid #ccc;border-radius:7px;overflow:hidden;margin-bottom:18px}
+.mode-btn   {flex:1;padding:9px;border:none;background:#fff;cursor:pointer;
+             font-size:13px;color:#666;font-family:inherit;transition:all .15s}
 .mode-btn.active{background:#1a1a1a;color:#fff;font-weight:700}
-.form-group{margin-bottom:14px}
-.form-label{font-size:12px;color:#555;margin-bottom:5px;display:block;font-weight:600}
-.ticket-section{background:#f9f8f6;border:1px solid #e8e5e0;border-radius:8px;padding:10px 12px}
-.ticket-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.ticket-label{font-size:13px;font-weight:600;flex:1}
+.form-group {margin-bottom:14px}
+.form-label {font-size:12px;color:#555;margin-bottom:5px;display:block;font-weight:600}
+
+/* ---- チケット ---- */
+.ticket-section {background:#f9f8f6;border:1px solid #e8e5e0;border-radius:8px;padding:10px 12px}
+.ticket-row     {display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ticket-label   {font-size:13px;font-weight:600;flex:1}
 .ticket-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.r-cell{padding:5px 2px;text-align:center;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;border:2px solid transparent;transition:all .1s;user-select:none;line-height:1.2;position:relative}
+
+/* ---- 逆転ボーナス ---- */
+.bonus-indicator{background:linear-gradient(135deg,#fff7ed,#fef3c7);
+                 border:1px solid #f59e0b;border-radius:8px;
+                 padding:10px 14px;margin-bottom:12px;
+                 display:flex;align-items:center;gap:10px}
+
+/* ---- ルーレット ---- */
+.r-cell{padding:5px 2px;text-align:center;border-radius:4px;cursor:pointer;
+        font-size:11px;font-weight:700;border:2px solid transparent;
+        transition:all .1s;user-select:none;line-height:1.2;position:relative}
 .r-cell:hover{opacity:.8;transform:scale(1.08)}
-.r-cell.sel{border-color:#fff!important;box-shadow:0 0 0 2px #1a1a1a}
-.r-red{background:#c0392b;color:#fff;border-color:#c0392b}
+.r-cell.sel  {border-color:#fff!important;box-shadow:0 0 0 2px #1a1a1a}
+.r-red  {background:#c0392b;color:#fff;border-color:#c0392b}
 .r-black{background:#2c2c2c;color:#fff;border-color:#2c2c2c}
 .r-green{background:#1d9e75;color:#fff;border-color:#1d9e75}
-.r-out{background:#f0ede8;color:#1a1a1a;border:1px solid #ccc}
+.r-out  {background:#f0ede8;color:#1a1a1a;border:1px solid #ccc}
 .r-out.sel{border:2px solid #1a1a1a!important;box-shadow:none}
-.other-bet-dot{position:absolute;top:1px;right:2px;width:5px;height:5px;background:#f39c12;border-radius:50%;border:1px solid rgba(255,255,255,.8)}
-.rank-row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:8px;border-bottom:1px solid #e0ddd8}
+.other-bet-dot{position:absolute;top:1px;right:2px;width:5px;height:5px;
+               background:#f39c12;border-radius:50%;border:1px solid rgba(255,255,255,.8)}
+
+/* ---- ランキング ---- */
+.rank-row     {display:flex;align-items:center;gap:10px;padding:9px 6px;
+               border-radius:8px;border-bottom:1px solid #e0ddd8}
 .rank-row:last-child{border-bottom:none}
-.rank-row.me{background:#f5f4f1}
-.rank-num{font-size:18px;width:28px;text-align:center}
-.price-up{color:#166534}
+.rank-row.me  {background:#f5f4f1}
+.rank-num     {font-size:18px;width:28px;text-align:center}
+.price-up {color:#166534}
 .price-down{color:#991b1b}
-.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;background:#1a1a1a;color:#fff;border-radius:8px;font-size:13px;z-index:9999;max-width:280px;animation:fadeIn .2s ease;pointer-events:none}
+
+/* ---- トースト ---- */
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;
+       background:#1a1a1a;color:#fff;border-radius:8px;font-size:13px;
+       z-index:9999;max-width:280px;animation:fadeIn .2s ease;pointer-events:none}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.roulette-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px}
+
+/* ---- ルーレットモーダル ---- */
+.roulette-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;
+                display:flex;flex-direction:column;align-items:center;
+                justify-content:center;gap:20px;padding:20px}
 .roulette-modal.hidden{display:none}
-.wheel-wrap{position:relative;width:260px;height:260px}
-.wheel-canvas{border-radius:50%;box-shadow:0 0 0 6px #8B6914,0 0 0 10px #5a4208,0 6px 30px rgba(0,0,0,.6)}
-.wheel-pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:22px solid #e74c3c;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
-.wheel-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;background:radial-gradient(circle,#f5e642,#c9a800);border-radius:50%;border:3px solid #8B6914;box-shadow:0 0 8px rgba(0,0,0,.4)}
-.modal-result{font-family:'DIN Condensed',system-ui,sans-serif;font-size:36px;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:44px;text-align:center}
-.modal-sub{font-size:15px;color:#ddd;text-align:center;min-height:24px}
-.modal-btn{padding:10px 28px;background:#fff;color:#1a1a1a;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s}
+.wheel-wrap   {position:relative;width:260px;height:260px}
+.wheel-canvas {border-radius:50%;
+               box-shadow:0 0 0 6px #8B6914,0 0 0 10px #5a4208,0 6px 30px rgba(0,0,0,.6)}
+.wheel-pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);
+               width:0;height:0;border-left:10px solid transparent;
+               border-right:10px solid transparent;border-top:22px solid #e74c3c;
+               filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.wheel-center {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+               width:28px;height:28px;
+               background:radial-gradient(circle,#f5e642,#c9a800);
+               border-radius:50%;border:3px solid #8B6914;
+               box-shadow:0 0 8px rgba(0,0,0,.4)}
+.modal-result {font-family:'DIN Condensed',system-ui,sans-serif;
+               font-size:36px;font-weight:700;color:#fff;
+               text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:44px;text-align:center}
+.modal-sub    {font-size:15px;color:#ddd;text-align:center;min-height:24px}
+.modal-btn    {padding:10px 28px;background:#fff;color:#1a1a1a;border:none;
+               border-radius:8px;font-size:14px;cursor:pointer;
+               font-family:inherit;font-weight:700;transition:all .15s}
 .modal-btn:hover{background:#eee}
 .modal-btn.hidden{display:none}
-.limit-bar{height:8px;background:#e5e3de;border-radius:4px;overflow:hidden;margin-top:6px}
-.limit-fill{height:100%;border-radius:4px;transition:width .3s}
-.bonus-indicator{background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
-@media(max-width:480px){.metrics{grid-template-columns:repeat(2,1fr)}.tab{padding:9px 10px;font-size:12px}}
+
+@media(max-width:480px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .tab{padding:9px 10px;font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -153,74 +200,115 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;font-size:1
   </div>
   <div class="modal-result" id="modal-result">🎰 スピン中...</div>
   <div class="modal-sub"    id="modal-sub"></div>
-  <button class="modal-btn hidden" id="modal-close-btn" onclick="W._closeModal()">閉じる</button>
+  <button class="modal-btn hidden" id="modal-close-btn"
+          onclick="W._closeModal()">閉じる</button>
 </div>
 
 <script type="module">
 import { auth, dbGet, dbSet, subscribeAll, toast, callApi } from './js/firebase.js';
 import { S, scheduleRender, doRender, renderPanel,
          withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
-import { renderLogin, login, logout, pushMeta, initAuth } from './js/auth.js';
-import { useTicket }           from './js/tickets.js';
+import { renderLogin, login, logout, pushMeta,
+         initAuth, changeTrait }                   from './js/auth.js';
+import { useTicket }                               from './js/tickets.js';
 import { doDeposit, addDeposit, withdrawDeposit,
-         doTermDeposit, withdrawTermDeposit }  from './js/deposit.js';
+         doTermDeposit, withdrawTermDeposit }       from './js/deposit.js';
 import { placeBet, toggleBet, clearBets,
-         processRoulette }     from './js/roulette.js';
-import { buyStock, sellStock, updateStockPrices } from './js/invest.js';
+         processRoulette }                         from './js/roulette.js';
+import { buyStock, sellStock, updateStockPrices }  from './js/invest.js';
 
 // ---- 初期データ保証 ----
 async function ensureDefaults() {
   if (!await dbGet('roulette'))
-    await dbSet('roulette', { next: Date.now()+3600000, bets:{}, last:null, processing:false });
+    await dbSet('roulette', {
+      next: Date.now()+3600000, bets:{}, last:null, processing:false
+    });
   if (!await dbGet('stocks')) {
     const now = Date.now();
     await dbSet('stocks', {
-      ALPHA: { name:'Alpha Corp', price:100, history:[100], nextUpdate:now+43200000 },
-      BETA:  { name:'Beta Inc',   price:80,  history:[80],  nextUpdate:now+43200000 },
-      GAMMA: { name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
+      ALPHA:{ name:'Alpha Corp', price:100, history:[100], nextUpdate:now+43200000 },
+      BETA: { name:'Beta Inc',   price:80,  history:[80],  nextUpdate:now+43200000 },
+      GAMMA:{ name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
     });
   }
 }
 
-// ---- 定期チェック ----
+// ---- 定期チェック（10秒ごと） ----
 let checking = false;
 async function periodicCheck() {
   if (!S.uid || checking) return;
   checking = true;
   try {
-    // チケット付与（PHPサーバー側で正確に計算）
-    await callApi('bonus.php', { action: 'ticket_check' }).catch(() => {});
+    // チケット付与
+    const tickRes = await callApi('bonus.php', { action:'ticket_check' })
+      .catch(() => null);
+    if (tickRes?.added > 0)
+      toast(`チケット×${tickRes.added}枚獲得`);
+    if (tickRes?.rare > 0)
+      toast(`★ レアチケット×${tickRes.rare}枚獲得！`);
+
     // ルーレット開催チェック
-    if (S.roulette && Date.now() >= S.roulette.next) {
+    if (S.roulette && Date.now() >= S.roulette.next)
       await processRoulette();
-    }
+
     // 株価更新チェック
     await updateStockPrices().catch(() => {});
-    // デイリーボーナスチェック
-    await callApi('bonus.php', { action: 'daily_bonus' })
-      .then(d => { if (d.bonus > 0) toast(`🎁 デイリーボーナス +${d.bonus} COIN！`, 5000); })
-      .catch(() => {});
+
+    // デイリーボーナス
+    const bonusRes = await callApi('bonus.php', { action:'daily_bonus' })
+      .catch(() => null);
+    if (bonusRes?.bonus > 0)
+      toast(`🎁 デイリーボーナス +${bonusRes.bonus} COIN！`, 5000);
+
+    // 1位補正ボーナス（デイリー・ログイン時）
+    await checkFirstBonus().catch(() => {});
+
   } finally {
     checking = false;
   }
 }
 
-// ---- 公開API (W.*) ----
+// ---- 1位補正ボーナス ----
+async function checkFirstBonus() {
+  const p = await dbGet(`players/${S.uid}`); if (!p) return;
+  const now = Date.now();
+  const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+  if ((p.lastFirstBonus||0) >= todayMid.getTime()) return; // 今日はもう受け取り済み
+
+  const meta  = S.playersMeta;
+  const rows  = Object.values(meta).sort((a,b)=>(b.rankTotal||0)-(a.rankTotal||0));
+  if (rows.length < 2) return; // 自分しかいない場合はスキップ
+  const first = rows[0].rankTotal || 0;
+  const myRt  = rows.find(m => m.name === (p.name||S.pname))?.rankTotal
+             || Math.round((p.coins||0)+(p.deposit?.principal||0)
+                          +(p.termDeposit?.principal||0)+(p.rouletteBet||0)+(p.investedCost||0));
+  if (myRt >= first) return; // 自分が1位の場合はスキップ
+
+  // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
+  const bonus = Math.floor(((first/(myRt+1) - 1)/100 + 1) * myRt);
+  if (bonus <= 0) return;
+
+  await dbSet(`players/${S.uid}/lastFirstBonus`, todayMid.getTime());
+  await dbSet(`players/${S.uid}/coins`,
+    Math.round((p.coins||0) + bonus));
+  toast(`👑 1位補正ボーナス +${bonus} COIN！`, 5000);
+}
+
+// ---- 公開API ----
 window.W = {
   // 内部ヘルパー
-  _setMode(m)  { S.lmode = m; S.lerr = ''; renderLogin(); },
-  _setTab(t)   { S.tab = t; scheduleRender(); },
+  _setMode(m)  { S.lmode=m; S.lerr=''; renderLogin(); },
+  _setTab(t)   { S.tab=t; scheduleRender(); },
   _toggleBet(type) { toggleBet(type); },
   _clearBets() { clearBets(); },
-  _qt(kind, n) {
-    const el = document.getElementById(kind==='n' ? 'conv-n' : 'conv-r');
+  _qt(kind,n)  {
+    const el = document.getElementById(kind==='n'?'conv-n':'conv-r');
     if (el) el.value = String(n);
   },
-  _closeModal() { document.getElementById('roulette-modal').classList.add('hidden'); },
+  _closeModal(){ document.getElementById('roulette-modal').classList.add('hidden'); },
 
   // 認証
-  login,
-  logout,
+  login, logout,
 
   // チケット
   useTicket,
@@ -234,38 +322,32 @@ window.W = {
 
   // 投資
   buyStock, sellStock,
+
+  // 特性
+  changeTrait,
 };
 
-// トーストをグローバルに公開
 window._toast = toast;
 
 // ---- 起動 ----
 async function main() {
   renderLogin();
-
   initAuth(
-    // ログイン時
     async (user) => {
       await ensureDefaults();
       const p = await dbGet(`players/${S.uid}`);
-      if (p) { S.pname = p.name; await pushMeta(p); }
-
-      // リアルタイム購読
+      if (p) { S.pname=p.name; await pushMeta(p); }
       subscribeAll(S.uid, {
-        onPlayer:   v => { if(v) { S.players[S.uid]=v; if(!S.submitting) scheduleRender(); } },
-        onMeta:     v => { S.playersMeta=v||{};        if(!S.submitting) scheduleRender(); },
-        onRoulette: v => { S.roulette=v;               if(!S.submitting) scheduleRender(); },
-        onStocks:   v => { S.stocks=v||{};             if(!S.submitting) scheduleRender(); },
+        onPlayer:   v => { if(v){ S.players[S.uid]=v; if(!S.submitting) scheduleRender(); } },
+        onMeta:     v => { S.playersMeta=v||{};       if(!S.submitting) scheduleRender(); },
+        onRoulette: v => { S.roulette=v;              if(!S.submitting) scheduleRender(); },
+        onStocks:   v => { S.stocks=v||{};            if(!S.submitting) scheduleRender(); },
       });
-
-      S.tab = 'home';
+      S.tab='home';
       scheduleRender();
     },
-    // ログアウト時
     () => { resetMain(); renderLogin(); }
   );
-
-  // タイマー
   setInterval(updateMetricsOnly, 1000);
   setInterval(periodicCheck, 10000);
 }
@@ -273,7 +355,10 @@ async function main() {
 main().catch(e => {
   console.error(e);
   document.getElementById('app').innerHTML =
-    `<div style="padding:40px;color:#c0392b"><h2>起動エラー</h2><p style="margin-top:8px;color:#444">${e.message}</p></div>`;
+    `<div style="padding:40px;color:#c0392b">
+       <h2>起動エラー</h2>
+       <p style="margin-top:8px;color:#444">${e.message}</p>
+     </div>`;
 });
 </script>
 </body>
