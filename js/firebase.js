@@ -97,18 +97,42 @@ export function currentBetUsage(p) {
   return r((p.rouletteBet||0)+(p.investedCost||0));
 }
 
-// ---- 逆転ボーナス ----
+// ---- 逆転ボーナス（特性バフ適用版） ----
+
+// チケット付与間隔
+// 仕事人: 間隔を50%短縮（最短15秒〜30秒）
 export function calcTicketInterval(p, playersMeta) {
-  const avg = avgAsset(playersMeta);
+  const avg   = avgAsset(playersMeta);
   if (avg <= 0) return 60000;
   const ratio = Math.min(1, rankTotal(p)/avg);
-  return r(30000 + ratio*30000);
+  // 逆転ボーナスで30秒〜60秒
+  const base  = r(30000 + ratio*30000);
+  // 仕事人バフ: 50%短縮
+  return p.trait === 'worker' ? r(base * 0.5) : base;
 }
+
+// レアチケット確率
+// バランサー: 常に20%固定（逆転ボーナスに関わらず最大値）
 export function calcRareProb(p, playersMeta) {
-  const avg = avgAsset(playersMeta);
+  if (p.trait === 'balancer') return 0.20;
+  const avg   = avgAsset(playersMeta);
   if (avg <= 0) return 0.10;
   const ratio = Math.min(1, rankTotal(p)/avg);
   return 0.20 - ratio*0.10;
+}
+
+// 利息計算（会計士バフ: 利率20%アップ）
+// 通常: 預金1%/日, 定期2%/日
+// 会計士: 預金1.2%/日, 定期2.4%/日
+export function calcInterestWithTrait(p) {
+  const now       = Date.now();
+  const isAccount = p.trait === 'accountant';
+  const depRate   = isAccount ? 1.012 : 1.01;
+  const tdepRate  = isAccount ? 1.024 : 1.02;
+  return {
+    depBal:  p.deposit     ? r(p.deposit.principal     * Math.pow(depRate,  (now-p.deposit.since)    /86400000)) : 0,
+    tdepBal: p.termDeposit ? r(p.termDeposit.principal * Math.pow(tdepRate, (now-p.termDeposit.since)/86400000)) : 0,
+  };
 }
 
 // ---- Firebase リアルタイム購読 ----
@@ -305,6 +329,11 @@ export async function callApi(endpoint, body={}) {
         holdings,
         investedCost: r((p.investedCost||0)+cost),
       });
+      // 交渉者バフ: 株価影響力2倍
+      // playersMeta に「自分の影響力係数」を記録し、株価更新時に参照
+      if (p.trait === 'negotiator') {
+        await dbUpdate(`playersMeta/${uid}`, { negotiatorBonus: true });
+      }
       return { ok:true, cost };
     }
 
@@ -331,8 +360,13 @@ export async function callApi(endpoint, body={}) {
       const updated  = {};
       for (const [sym, s] of Object.entries(stocks)) {
         if (Date.now() < (s.nextUpdate||0)) continue;
-        const cur        = s.price || 1;
-        const totalHeld  = Object.values(meta).reduce((sum,m)=>sum+(m.holdings?.[sym]||0), 0);
+        const cur = s.price || 1;
+        // 交渉者バフ: 保有株数を2倍として計算
+        const totalHeld = Object.entries(meta).reduce((sum,[muid,m]) => {
+          const held = m.holdings?.[sym] || 0;
+          const isNegotiator = m.trait === 'negotiator';
+          return sum + (isNegotiator ? held*2 : held);
+        }, 0);
         let raw;
         if (totalHeld === 0) {
           raw = 1 + (Math.random()-0.5)*0.02;
@@ -362,8 +396,11 @@ export async function callApi(endpoint, body={}) {
 
     if (body.action === 'ticket_check') {
       const ratio    = avg > 0 ? Math.min(1, myTotal/avg) : 1;
-      const interval = r(30000 + ratio*30000);
-      const rareProb = 0.20 - ratio*0.10;
+      // 仕事人バフ: チケット間隔50%短縮
+      const baseInterval = r(30000 + ratio*30000);
+      const interval = p.trait === 'worker' ? r(baseInterval*0.5) : baseInterval;
+      // バランサーバフ: レア確率20%固定
+      const rareProb = p.trait === 'balancer' ? 0.20 : (0.20 - ratio*0.10);
       const elapsed  = now - (p.lastTicketTime||now);
       const newT     = Math.floor(elapsed/interval);
       if (newT <= 0) return { ok:true, added:0, rare:0 };
