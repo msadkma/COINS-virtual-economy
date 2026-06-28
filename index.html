@@ -216,6 +216,14 @@ import { doDeposit, addDeposit, withdrawDeposit,
 import { placeBet, toggleBet, clearBets,
          processRoulette }                         from './js/roulette.js';
 import { buyStock, sellStock, updateStockPrices }  from './js/invest.js';
+import { foundCompany, setDesiredPrice, inviteCoOwner,
+         acceptInvite, rejectInvite,
+         buyCompanyStock, sellCompanyStock,
+         dissolveCompany, updateCompanyPrices,
+         processDividends }                        from './js/company.js';
+import { onValue, ref, off }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ---- 初期データ保証 ----
 async function ensureDefaults() {
@@ -231,6 +239,21 @@ async function ensureDefaults() {
       GAMMA:{ name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
     });
   }
+  // companiesノードが存在しない場合は空で初期化
+  if (!await dbGet('companies'))
+    await dbSet('companies', {});
+}
+
+// ---- 会社データの購読 ----
+let companyUnsub = null;
+function subscribeCompanies() {
+  const db2 = getDatabase();
+  const cRef = ref(db2, 'companies');
+  if (companyUnsub) { try { off(cRef); } catch(_){} }
+  companyUnsub = onValue(cRef, snap => {
+    S.companies = snap.val() || {};
+    if (!S.submitting) scheduleRender();
+  });
 }
 
 // ---- 定期チェック（10秒ごと） ----
@@ -253,6 +276,10 @@ async function periodicCheck() {
 
     // 株価更新チェック
     await updateStockPrices().catch(() => {});
+
+    // 会社株価更新・配当処理
+    await updateCompanyPrices(S.playersMeta).catch(() => {});
+    await processDividends().catch(() => {});
 
     // デイリーボーナス
     const bonusRes = await callApi('bonus.php', { action:'daily_bonus' })
@@ -333,6 +360,12 @@ window.W = {
 
   // 特性
   changeTrait,
+
+  // 会社
+  foundCompany, setDesiredPrice, inviteCoOwner,
+  acceptInvite, rejectInvite,
+  buyCompanyStock, sellCompanyStock,
+  dissolveCompany,
 };
 
 window._toast = toast;
@@ -351,6 +384,7 @@ async function main() {
         onRoulette: v => { S.roulette=v;              if(!S.submitting) scheduleRender(); },
         onStocks:   v => { S.stocks=v||{};            if(!S.submitting) scheduleRender(); },
       });
+      subscribeCompanies(); // 会社データの購読
       S.tab='home';
       scheduleRender();
     },
