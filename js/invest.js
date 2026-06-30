@@ -1,7 +1,7 @@
 // ============================================================
-//  js/invest.js  株式売買・株価更新UI
+//  js/invest.js  株式売買UI（Cloud Functions版）
 // ============================================================
-import { callApi, toast, fmt, r, esc,
+import { callFn, toast, fmt, r, esc,
          calcBetLimit, currentBetUsage } from './firebase.js';
 import { S, withSubmit } from './ui.js';
 
@@ -9,7 +9,7 @@ export async function buyStock(symbol) {
   await withSubmit(async () => {
     const qty = parseInt(document.getElementById('buy-' + symbol)?.value) || 0;
     if (qty <= 0) { toast('株数を入力してください'); return; }
-    const data = await callApi('invest.php', { action: 'buy', symbol, qty });
+    const data = await callFn('invest', { action: 'buy', symbol, qty });
     toast(`${symbol} ${qty}株を購入 (-${fmt(data.cost)} COIN)`);
   });
 }
@@ -18,21 +18,14 @@ export async function sellStock(symbol) {
   await withSubmit(async () => {
     const qty = parseInt(document.getElementById('sell-' + symbol)?.value) || 0;
     if (qty <= 0) { toast('株数を入力してください'); return; }
-    const data = await callApi('invest.php', { action: 'sell', symbol, qty });
+    const data = await callFn('invest', { action: 'sell', symbol, qty });
     toast(`${symbol} ${qty}株を売却 (+${fmt(data.revenue)} COIN)`);
   });
 }
 
-export async function updateStockPrices() {
-  try {
-    const data = await callApi('invest.php', { action: 'update_price' });
-    for (const [sym, info] of Object.entries(data.updated || {})) {
-      const chg = info.new - info.old;
-      toast(`📊 ${sym} 株価更新: ${fmt(info.new)} C (${chg>=0?'+':''}${fmt(chg)})`);
-    }
-  } catch(e) {
-    if (!e.message.includes('time')) console.error('stock update:', e.message);
-  }
+// 株価更新は Cloud Functions の scheduledStockUpdate が12時間ごとに自動実行
+// クライアント側からの手動呼び出しは不要（互換性のため空関数として残す）
+export async function updateStockPrices() { /* no-op: Cloud Functionsが処理 */ }
 }
 
 // ---- 投資UI構築 ----
