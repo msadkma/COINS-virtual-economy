@@ -205,10 +205,10 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
 </div>
 
 <script type="module">
-import { auth, dbGet, dbSet, subscribeAll, toast, callFn } from './js/firebase.js';
+import { auth, dbGet, subscribeAll, toast, callFn } from './js/firebase.js';
 import { S, scheduleRender, doRender, renderPanel,
          withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
-import { renderLogin, login, logout, pushMeta,
+import { renderLogin, login, logout,
          initAuth, changeTrait }                   from './js/auth.js';
 import { useTicket }                               from './js/tickets.js';
 import { doDeposit, addDeposit, withdrawDeposit,
@@ -224,13 +224,10 @@ import { onValue, ref, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// ---- 初期データ保証（companiesノードのみクライアント側で初期化） ----
-// roulette・stocks は Cloud Functions のデプロイ時に初期化される想定だが、
-// 念のためクライアント側でも作成を試みる（権限がない場合は無視される）
+// ---- 初期データ保証 ----
+// Cloud Functions の ensureGameDefaults を呼び、まだなければサーバー側で作成する
 async function ensureDefaults() {
-  if (!await dbGet('companies')) {
-    try { await dbSet('companies', {}); } catch(_) {}
-  }
+  try { await callFn('ensureGameDefaults', {}); } catch(_) {}
 }
 
 // ---- 会社データの購読 ----
@@ -305,7 +302,7 @@ async function main() {
     async (user) => {
       await ensureDefaults();
       const p = await dbGet(`players/${S.uid}`);
-      if (p) { S.pname=p.name; await pushMeta(p); }
+      if (p) { S.pname = p.name; }
       subscribeAll(S.uid, {
         onPlayer:   v => { if(v){ S.players[S.uid]=v; if(!S.submitting) scheduleRender(); } },
         onMeta:     v => { S.playersMeta=v||{};       if(!S.submitting) scheduleRender(); },
