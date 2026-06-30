@@ -1,7 +1,7 @@
 // ============================================================
 //  js/company.js  起業制度
 // ============================================================
-import { dbGet, dbSet, dbUpdate, auth, toast, fmt, r, esc,
+import { callFn, dbGet, dbSet, dbUpdate, auth, toast, fmt, r, esc,
          rankTotal } from './firebase.js';
 import { S, withSubmit, renderPanel } from './ui.js';
 import { pushMeta } from './auth.js';
@@ -274,42 +274,14 @@ export function buildCompany(p, S) {
 // ============================================================
 export async function foundCompany() {
   await withSubmit(async () => {
-    const name   = document.getElementById('co-name')?.value.trim();
-    const price  = r(parseFloat(document.getElementById('co-price')?.value)||0);
-    const shares = r(parseFloat(document.getElementById('co-shares')?.value)||0);
-    if (!name)        { toast('会社名を入力してください'); return; }
-    if (price  < 1)   { toast('株価は1以上にしてください'); return; }
-    if (shares < 1)   { toast('発行株数は1以上にしてください'); return; }
-    const cost = calcFoundCost(price, shares);
-    const p    = await dbGet(`players/${S.uid}`);
-    if (!p)           { toast('プレイヤーデータ取得失敗'); return; }
-    if (cost > r(p.coins||0)) { toast(`${fmt(cost)} COINが必要です`); return; }
-    const now  = Date.now();
-    const id   = 'co_' + now + '_' + Math.random().toString(36).slice(2,7);
-    const comp = {
-      id, name,
-      ownerId:            S.uid,
-      ownerName:          p.name || S.pname,
-      initialPrice:       price,
-      totalShares:        shares,
-      circulatingShares:  shares,
-      price,
-      history:            [price],
-      nextUpdate:         now + 43200000,
-      capital:            cost,
-      owners:             { [S.uid]: { name: p.name||S.pname, capital: cost, trait: p.trait||null } },
-      shareholders:       {},
-      desiredPrices:      {},
-      invites:            {},
-      totalDividendPaid:  0,
-      nextDividend:       now + 7*86400000,
-      pendingBonus:       0,
-      createdAt:          now,
-    };
-    await dbSet(`companies/${id}`, comp);
-    await dbUpdate(`players/${S.uid}`, { coins: r((p.coins||0)-cost) });
-    await pushMeta({ ...p, coins: r((p.coins||0)-cost) });
-    toast(`🏢 「${name}」を設立しました！ (-${fmt(cost)} COIN)`);
+    const name   = document.getElementById("co-name")?.value.trim();
+    const price  = r(parseFloat(document.getElementById("co-price")?.value)||0);
+    const shares = r(parseFloat(document.getElementById("co-shares")?.value)||0);
+    if (!name)      { toast("会社名を入力してください"); return; }
+    if (price  < 1) { toast("株価は1以上にしてください"); return; }
+    if (shares < 1) { toast("発行株数は1以上にしてください"); return; }
+    const data = await callFn("foundCompany", { name, price, shares });
+    toast(`🏢 「${name}」を設立しました！ (-${fmt(data.cost)} COIN)`);
   });
 }
 
@@ -318,238 +290,74 @@ export async function foundCompany() {
 // ============================================================
 export async function setDesiredPrice(companyId) {
   await withSubmit(async () => {
-    const c    = await dbGet(`companies/${companyId}`);
-    if (!c) { toast('会社が見つかりません'); return; }
-    const dp   = r(parseFloat(document.getElementById(`dp-${companyId}`)?.value)||0);
-    const min  = r(c.price * 0.5);
-    const max  = r(c.price * 2);
-    if (dp < min || dp > max) { toast(`希望株価は ${fmt(min)}〜${fmt(max)} COINの範囲で設定してください`); return; }
-    await dbUpdate(`companies/${companyId}/desiredPrices`, { [S.uid]: dp });
+    const c  = S.companies?.[companyId];
+    if (!c) { toast("会社が見つかりません"); return; }
+    const dp = r(parseFloat(document.getElementById(`dp-${companyId}`)?.value)||0);
+    const min = r(c.price*0.5), max = r(c.price*2);
+    if (dp < min || dp > max) {
+      toast(`希望株価は ${fmt(min)}〜${fmt(max)} COINの範囲で設定してください`); return;
+    }
+    await callFn("setDesiredPrice", { companyId, desiredPrice: dp });
     toast(`希望株価を ${fmt(dp)} C に設定しました`);
   });
 }
 
-// ============================================================
-//  共同経営者招待
-// ============================================================
 export async function inviteCoOwner(companyId) {
   await withSubmit(async () => {
     const targetName = document.getElementById(`inv-${companyId}`)?.value.trim();
-    if (!targetName) { toast('プレイヤー名を入力してください'); return; }
-    // playersMeta から名前でUID検索
-    const meta   = await dbGet('playersMeta') || {};
-    const entry  = Object.entries(meta).find(([,m]) => m.name === targetName);
-    if (!entry)  { toast('プレイヤーが見つかりません'); return; }
-    const [targetUid, targetMeta] = entry;
-    if (targetUid === S.uid) { toast('自分自身を招待できません'); return; }
-    const c = await dbGet(`companies/${companyId}`);
-    if (Object.keys(c.owners||{}).includes(targetUid)) {
-      toast('すでに経営者です'); return;
-    }
-    await dbUpdate(`companies/${companyId}/invites`, {
-      [targetUid]: { name: targetMeta.name||'???', status: 'pending', sentAt: Date.now() }
-    });
-    toast(`${targetName} に招待を送りました`);
+    if (!targetName) { toast("プレイヤー名を入力してください"); return; }
+    await callFn("inviteCoOwner", { companyId, targetName });
+    toast(`${esc(targetName)} に招待を送りました`);
   });
 }
 
-// ============================================================
-//  招待承認・拒否
-// ============================================================
 export async function acceptInvite(companyId) {
   await withSubmit(async () => {
-    const p = await dbGet(`players/${S.uid}`); if (!p) return;
-    const c = await dbGet(`companies/${companyId}`); if (!c) return;
-    // 共同経営者として追加
-    await dbUpdate(`companies/${companyId}/owners`, {
-      [S.uid]: { name: p.name||S.pname, capital: 0, trait: p.trait||null }
-    });
-    await dbUpdate(`companies/${companyId}/invites/${S.uid}`, { status: 'accepted' });
-    toast(`「${c.name}」の共同経営者になりました`);
+    await callFn("acceptInvite", { companyId });
+    const c = S.companies?.[companyId];
+    toast(`「${esc(c?.name||"")}」の共同経営者になりました`);
   });
 }
 
 export async function rejectInvite(companyId) {
   await withSubmit(async () => {
-    await dbUpdate(`companies/${companyId}/invites/${S.uid}`, { status: 'rejected' });
-    toast('招待を拒否しました');
+    await callFn("rejectInvite", { companyId });
+    toast("招待を拒否しました");
   });
 }
 
-// ============================================================
-//  会社株の購入（流通分のみ）
-// ============================================================
 export async function buyCompanyStock(companyId) {
   await withSubmit(async () => {
     const qty = r(parseFloat(document.getElementById(`cbuy-${companyId}`)?.value)||0);
-    if (qty <= 0) { toast('株数を入力してください'); return; }
-    const c = await dbGet(`companies/${companyId}`); if (!c) return;
-    if ((c.circulatingShares||0) < qty) { toast('流通株数が不足しています'); return; }
-    const p    = await dbGet(`players/${S.uid}`); if (!p) return;
-    const cost = r(c.price * qty);
-    if (cost > r(p.coins||0)) { toast('COINが不足しています'); return; }
-    const newShares = r((c.shareholders?.[S.uid]||0) + qty);
-    // 会社側: 流通株数を減らし、ボーナスを積算
-    const bonusRate = hasAllTraits(c.owners, S.playersMeta) ? 2 : 1;
-    await dbUpdate(`companies/${companyId}`, {
-      circulatingShares: (c.circulatingShares||0) - qty,
-      pendingBonus:      r((c.pendingBonus||0) + bonusRate * qty),
-      [`shareholders/${S.uid}`]: newShares,
-    });
-    // プレイヤー: コイン減少・会社株保有を holdings に記録
-    const holdings = { ...(p.holdings||{}) };
-    holdings[`co_${companyId}`] = newShares;
-    await dbUpdate(`players/${S.uid}`, {
-      coins:        r((p.coins||0)-cost),
-      holdings,
-      investedCost: r((p.investedCost||0)+cost),
-    });
-    await pushMeta({ ...p, coins: r((p.coins||0)-cost),
-                     holdings, investedCost: r((p.investedCost||0)+cost) });
-    toast(`${esc(c.name)} ${qty}株を購入 (-${fmt(cost)} COIN)`);
+    if (qty <= 0) { toast("株数を入力してください"); return; }
+    const c = S.companies?.[companyId];
+    const data = await callFn("buyCompanyStock", { companyId, qty });
+    toast(`${esc(c?.name||"")} ${qty}株を購入 (-${fmt(data.cost)} COIN)`);
   });
 }
 
-// ============================================================
-//  会社株の売却
-// ============================================================
 export async function sellCompanyStock(companyId) {
   await withSubmit(async () => {
     const qty = r(parseFloat(document.getElementById(`csell-${companyId}`)?.value)||0);
-    if (qty <= 0) { toast('株数を入力してください'); return; }
-    const c = await dbGet(`companies/${companyId}`); if (!c) return;
-    const p = await dbGet(`players/${S.uid}`); if (!p) return;
-    const held = c.shareholders?.[S.uid] || 0;
-    if (held < qty) { toast('保有数が不足しています'); return; }
-    const rev  = r(c.price * qty);
-    const newShares = held - qty;
-    // 会社側: 流通株数を戻す（売却されたら市場に戻る）
-    await dbUpdate(`companies/${companyId}`, {
-      circulatingShares: (c.circulatingShares||0) + qty,
-      [`shareholders/${S.uid}`]: newShares,
-    });
-    // プレイヤー: コイン増加
-    const totalHeld  = Object.values(p.holdings||{}).reduce((a,b)=>a+b,0);
-    const avgCost    = totalHeld > 0 ? (p.investedCost||0)/totalHeld : 0;
-    const holdings   = { ...(p.holdings||{}) };
-    holdings[`co_${companyId}`] = newShares;
-    await dbUpdate(`players/${S.uid}`, {
-      coins:        r((p.coins||0)+rev),
-      holdings,
-      investedCost: Math.max(0, r((p.investedCost||0)-r(avgCost*qty))),
-    });
-    await pushMeta({ ...p, coins: r((p.coins||0)+rev), holdings,
-                     investedCost: Math.max(0,r((p.investedCost||0)-r(avgCost*qty))) });
-    toast(`${esc(c.name)} ${qty}株を売却 (+${fmt(rev)} COIN)`);
+    if (qty <= 0) { toast("株数を入力してください"); return; }
+    const c = S.companies?.[companyId];
+    const data = await callFn("sellCompanyStock", { companyId, qty });
+    toast(`${esc(c?.name||"")} ${qty}株を売却 (+${fmt(data.revenue)} COIN)`);
   });
 }
 
-// ============================================================
-//  会社解散
-// ============================================================
 export async function dissolveCompany(companyId) {
   await withSubmit(async () => {
-    const c = await dbGet(`companies/${companyId}`); if (!c) return;
-    if (c.ownerId !== S.uid) { toast('解散できるのは創業者のみです'); return; }
-    const p = await dbGet(`players/${S.uid}`); if (!p) return;
-    // 経営者の出資分を返還（均等分割）
-    const ownerCount = Object.keys(c.owners||{}).length;
-    const returnPerOwner = r((c.capital||0) / ownerCount);
-    for (const ownerUid of Object.keys(c.owners||{})) {
-      const op = await dbGet(`players/${ownerUid}`);
-      if (op) {
-        await dbUpdate(`players/${ownerUid}`, {
-          coins: r((op.coins||0) + returnPerOwner)
-        });
-      }
-    }
-    await dbSet(`companies/${companyId}`, null);
-    toast(`「${esc(c.name)}」を解散しました。出資金 ${fmt(returnPerOwner)} C が返還されました`);
+    const c = S.companies?.[companyId];
+    if (!c) { toast("会社が見つかりません"); return; }
+    const data = await callFn("dissolveCompany", { companyId });
+    toast(`「${esc(c.name)}」を解散しました。出資金 ${fmt(data.returned)} C が返還されました`);
   });
 }
 
 // ============================================================
-//  株価更新（会社株）
+//  株価更新・配当処理は Cloud Functions の scheduledCompanyUpdate が
+//  自動実行するため、クライアント側では何もしない（互換性維持のため残す）
 // ============================================================
-export async function updateCompanyPrices(playersMeta) {
-  const companies = await dbGet('companies') || {};
-  for (const [id, c] of Object.entries(companies)) {
-    if (Date.now() < (c.nextUpdate||0)) continue;
-    const cur     = c.price || 1;
-    const circ    = c.circulatingShares || 1;
-    const initial = c.capital || cur;
-    // 株価変動 = 起業資金 / 流通株数 × ノイズ（逆数変動なし）
-    const base    = initial / circ;
-    const noise   = 1 + (Math.random()-0.5)*0.04;
-    let   newPriceRaw = base * noise;
-    // 希望株価の平均と本来の変動後の平均をとる
-    const desired = Object.values(c.desiredPrices||{});
-    if (desired.length > 0) {
-      const avgDesired = desired.reduce((a,b)=>a+b,0) / desired.length;
-      newPriceRaw = (newPriceRaw + avgDesired) / 2;
-    }
-    const newPrice = Math.max(1, r(newPriceRaw));
-    const history  = [...(c.history||[cur]), newPrice].slice(-60);
-    await dbUpdate(`companies/${id}`, {
-      price:         newPrice,
-      history,
-      nextUpdate:    Date.now()+43200000,
-      desiredPrices: {}, // 更新後は希望株価をリセット
-    });
-  }
-}
-
-// ============================================================
-//  配当処理（週次）
-// ============================================================
-export async function processDividends() {
-  const companies = await dbGet('companies') || {};
-  for (const [id, c] of Object.entries(companies)) {
-    if (Date.now() < (c.nextDividend||0)) continue;
-    const shareholders = c.shareholders || {};
-    let totalDividend  = 0;
-    for (const [shUid, qty] of Object.entries(shareholders)) {
-      if (qty <= 0) continue;
-      // 配当 = 購入時の株価 × 株数 × 1%（購入コストは holdings から推定）
-      const divAmount = Math.max(1, r(c.price * qty * 0.01));
-      const sp = await dbGet(`players/${shUid}`);
-      if (sp) {
-        await dbUpdate(`players/${shUid}`, {
-          coins: r((sp.coins||0) + divAmount)
-        });
-        totalDividend += divAmount;
-      }
-    }
-    // 配当分を経営者からの支出として処理（経営者から均等徴収）
-    const ownerUids  = Object.keys(c.owners||{});
-    const perOwner   = ownerUids.length > 0 ? r(totalDividend/ownerUids.length) : 0;
-    for (const ownerUid of ownerUids) {
-      const op = await dbGet(`players/${ownerUid}`);
-      if (op) {
-        await dbUpdate(`players/${ownerUid}`, {
-          coins: Math.max(0, r((op.coins||0) - perOwner))
-        });
-      }
-    }
-    // pendingBonusを経営者に分配
-    if ((c.pendingBonus||0) > 0) {
-      const bonusPerOwner = r((c.pendingBonus||0) / Math.max(1, ownerUids.length));
-      for (const ownerUid of ownerUids) {
-        const op = await dbGet(`players/${ownerUid}`);
-        if (op) {
-          await dbUpdate(`players/${ownerUid}`, {
-            coins: r((op.coins||0) + bonusPerOwner)
-          });
-        }
-      }
-      if (bonusPerOwner > 0) toast(`🏢 売却ボーナス +${fmt(bonusPerOwner)} COIN！`);
-    }
-    await dbUpdate(`companies/${id}`, {
-      nextDividend:      Date.now()+7*86400000,
-      totalDividendPaid: r((c.totalDividendPaid||0)+totalDividend),
-      pendingBonus:      0,
-    });
-    if (totalDividend > 0)
-      toast(`💰 ${esc(c.name)} から配当 受け取り！`, 4000);
-  }
-}
+export async function updateCompanyPrices() { /* no-op: Cloud Functionsが処理 */ }
+export async function processDividends()    { /* no-op: Cloud Functionsが処理 */ }
