@@ -2,7 +2,7 @@
 //  js/auth.js  ログイン・ログアウト・新規登録
 // ============================================================
 import { auth, dbGet, dbSet, dbUpdate, rankTotal,
-         calcInterest, toast } from './firebase.js';
+         calcInterest, callFn, toast } from './firebase.js';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -170,25 +170,16 @@ export function initAuth(onLogin, onLogout) {
   });
 }
 
-// ---- 特性変更 ----
+// ---- 特性変更（Cloud Functions版：サーバー側で2000COIN検証） ----
 export async function changeTrait() {
-  const p = await dbGet(`players/${S.uid}`);
-  if (!p) return;
-  if ((p.coins||0) < 2000) { toast('2000 COINが必要です'); return; }
-  const TRAITS = ['worker','manager','negotiator','balancer','accountant'];
-  const current = p.trait;
-  // 現在と違う特性をランダムに選ぶ
-  let newTrait;
-  do { newTrait = TRAITS[Math.floor(Math.random()*TRAITS.length)]; }
-  while (newTrait === current);
-  await dbUpdate(`players/${S.uid}`, {
-    coins: Math.round((p.coins||0) - 2000),
-    trait: newTrait,
-  });
-  const traitMap = {
-    worker:'仕事人', manager:'経営者', negotiator:'交渉者',
-    balancer:'バランサー', accountant:'会計士',
-  };
-  toast(`特性が「${traitMap[newTrait]}」に変更されました (-2000 COIN)`);
-  await pushMeta({ ...p, coins: Math.round((p.coins||0)-2000), trait: newTrait });
+  try {
+    const data = await callFn('changeTrait', {});
+    const traitMap = {
+      worker:'仕事人', manager:'経営者', negotiator:'交渉者',
+      balancer:'バランサー', accountant:'会計士',
+    };
+    toast(`特性が「${traitMap[data.newTrait]}」に変更されました (-2000 COIN)`);
+  } catch(e) {
+    toast('エラー: ' + e.message);
+  }
 }
