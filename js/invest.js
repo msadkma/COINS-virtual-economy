@@ -26,7 +26,6 @@ export async function sellStock(symbol) {
 // 株価更新は Cloud Functions の scheduledStockUpdate が12時間ごとに自動実行
 // クライアント側からの手動呼び出しは不要（互換性のため空関数として残す）
 export async function updateStockPrices() { /* no-op: Cloud Functionsが処理 */ }
-}
 
 // ---- 投資UI構築 ----
 export function buildInvest(p, S) {
