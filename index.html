@@ -205,7 +205,7 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
 </div>
 
 <script type="module">
-import { auth, dbGet, dbSet, subscribeAll, toast, callApi } from './js/firebase.js';
+import { auth, dbGet, dbSet, subscribeAll, toast, callFn } from './js/firebase.js';
 import { S, scheduleRender, doRender, renderPanel,
          withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
 import { renderLogin, login, logout, pushMeta,
@@ -214,34 +214,23 @@ import { useTicket }                               from './js/tickets.js';
 import { doDeposit, addDeposit, withdrawDeposit,
          doTermDeposit, withdrawTermDeposit }       from './js/deposit.js';
 import { placeBet, toggleBet, clearBets,
-         processRoulette }                         from './js/roulette.js';
-import { buyStock, sellStock, updateStockPrices }  from './js/invest.js';
+         watchRouletteResult }                      from './js/roulette.js';
+import { buyStock, sellStock }                      from './js/invest.js';
 import { foundCompany, setDesiredPrice, inviteCoOwner,
          acceptInvite, rejectInvite,
          buyCompanyStock, sellCompanyStock,
-         dissolveCompany, updateCompanyPrices,
-         processDividends }                        from './js/company.js';
+         dissolveCompany }                          from './js/company.js';
 import { onValue, ref, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// ---- 初期データ保証 ----
+// ---- 初期データ保証（companiesノードのみクライアント側で初期化） ----
+// roulette・stocks は Cloud Functions のデプロイ時に初期化される想定だが、
+// 念のためクライアント側でも作成を試みる（権限がない場合は無視される）
 async function ensureDefaults() {
-  if (!await dbGet('roulette'))
-    await dbSet('roulette', {
-      next: Date.now()+3600000, bets:{}, last:null, processing:false
-    });
-  if (!await dbGet('stocks')) {
-    const now = Date.now();
-    await dbSet('stocks', {
-      ALPHA:{ name:'Alpha Corp', price:100, history:[100], nextUpdate:now+43200000 },
-      BETA: { name:'Beta Inc',   price:80,  history:[80],  nextUpdate:now+43200000 },
-      GAMMA:{ name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
-    });
+  if (!await dbGet('companies')) {
+    try { await dbSet('companies', {}); } catch(_) {}
   }
-  // companiesノードが存在しない場合は空で初期化
-  if (!await dbGet('companies'))
-    await dbSet('companies', {});
 }
 
 // ---- 会社データの購読 ----
@@ -256,77 +245,16 @@ function subscribeCompanies() {
   });
 }
 
-// ---- 定期チェック（10秒ごと） ----
-let checking = false;
+// ============================================================
+//  定期チェック（10秒ごと）
+//  ★ Cloud Functions移行後は、実際の処理（チケット付与・ルーレット開催・
+//    株価更新・配当・デイリーボーナス・1位補正）はすべてサーバー側の
+//    スケジュール実行（functions/index.js の onSchedule）が自動で行う。
+//  クライアント側はルーレットの結果が変化したら演出を表示するだけでよい。
+// ============================================================
 async function periodicCheck() {
-  if (!S.uid || checking) return;
-  checking = true;
-  try {
-    // チケット付与
-    const tickRes = await callApi('bonus.php', { action:'ticket_check' })
-      .catch(() => null);
-    if (tickRes?.added > 0)
-      toast(`チケット×${tickRes.added}枚獲得`);
-    if (tickRes?.rare > 0)
-      toast(`★ レアチケット×${tickRes.rare}枚獲得！`);
-
-    // ルーレット開催チェック
-    if (S.roulette && Date.now() >= S.roulette.next)
-      await processRoulette();
-
-    // 株価更新チェック
-    await updateStockPrices().catch(() => {});
-
-    // 会社株価更新・配当処理
-    await updateCompanyPrices(S.playersMeta).catch(() => {});
-    await processDividends().catch(() => {});
-
-    // デイリーボーナス
-    const bonusRes = await callApi('bonus.php', { action:'daily_bonus' })
-      .catch(() => null);
-    if (bonusRes?.bonus > 0)
-      toast(`🎁 デイリーボーナス +${bonusRes.bonus} COIN！`, 5000);
-
-    // 1位補正ボーナス（デイリー・ログイン時）
-    await checkFirstBonus().catch(() => {});
-
-  } finally {
-    checking = false;
-  }
-}
-
-// ---- 1位補正ボーナス（計算式修正・経営者バフ適用） ----
-async function checkFirstBonus() {
-  const p = await dbGet(`players/${S.uid}`); if (!p) return;
-  const todayMid = new Date(); todayMid.setHours(0,0,0,0);
-  if ((p.lastFirstBonus||0) >= todayMid.getTime()) return;
-
-  const meta = S.playersMeta;
-  const rows = Object.values(meta).sort((a,b)=>(b.rankTotal||0)-(a.rankTotal||0));
-  if (rows.length < 2) return;
-  const first = rows[0].rankTotal || 0;
-  const myRt  = Math.round(
-    (p.coins||0)+(p.deposit?.principal||0)
-   +(p.termDeposit?.principal||0)+(p.rouletteBet||0)+(p.investedCost||0)
-  );
-  if (myRt >= first) return; // 1位の場合はスキップ
-
-  // 修正後の計算式:
-  // base = floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
-  // 補正額 = base - 自分資産
-  const base  = Math.floor(((first/(myRt+1) - 1)/100 + 1) * myRt);
-  let   bonus = base - myRt;
-  if (bonus <= 0) return;
-
-  // 経営者バフ: 補正COINを2倍
-  if (p.trait === 'manager') bonus = bonus * 2;
-
-  await dbUpdate(`players/${S.uid}`, {
-    coins:          Math.round((p.coins||0) + bonus),
-    lastFirstBonus: todayMid.getTime(),
-  });
-  const managerNote = p.trait === 'manager' ? '（経営者バフ×2）' : '';
-  toast(`👑 1位補正ボーナス +${bonus} COIN！${managerNote}`, 5000);
+  if (!S.uid) return;
+  await watchRouletteResult(S).catch(() => {});
 }
 
 // ---- 公開API ----
