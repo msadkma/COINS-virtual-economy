@@ -1,7 +1,7 @@
 // ============================================================
 //  js/roulette.js  ルーレット（演出修正版）
 // ============================================================
-import { callApi, toast, fmt, r, esc,
+import { callFn, toast, fmt, r, esc,
          isRed, isBlack, WHEEL_ORDER, calcBetLimit, currentBetUsage }
   from './firebase.js';
 import { S, withSubmit, renderPanel } from './ui.js';
@@ -116,8 +116,9 @@ export async function placeBet() {
     const bets  = S.rbets;
     const total = r(Object.values(bets).reduce((a,b)=>a+b, 0));
     if (total <= 0) { toast('賭け箇所を選んでください'); return; }
-    await callApi('roulette.php', { action:'bet', bets, total });
+    await callFn('rouletteBet', { bets, total });
     S.rbets = {};
+    S._hadPendingBet = true; // 演出表示のためのフラグ
     toast(`${fmt(total)} COINをベット確定！`);
   });
 }
@@ -125,19 +126,31 @@ export async function placeBet() {
 // ============================================================
 //  ルーレット開催処理（演出付き）
 // ============================================================
+// ============================================================
+//  ルーレット結果監視（Cloud Functions版）
+//  サーバー側のスケジュール実行が結果をDBに書き込むため、
+//  クライアントは roulette/last の変化を監視して演出を出すだけでよい
+// ============================================================
+let lastSeenResult = null;
+export async function watchRouletteResult(S) {
+  const rd = S.roulette;
+  if (!rd || rd.last == null) return;
+  if (lastSeenResult === rd.last) return; // 既に見た結果
+  lastSeenResult = rd.last;
+  // 自分が直前にベットしていたか確認するのは難しいため、
+  // ベット履歴のローカルフラグで判定
+  if (S._hadPendingBet) {
+    S._hadPendingBet = false;
+    const subEl = document.getElementById('modal-sub');
+    await spinWheel(rd.last);
+    if (subEl) subEl.textContent = '結果が確定しました！';
+  }
+}
+
+// 手動トリガー版（残しておくが通常は使わない）
 export async function processRoulette() {
   try {
-    const data = await callApi('roulette.php', { action:'process' });
-    if (data.had_bet) {
-      // 演出を表示してからスピン
-      const subEl = document.getElementById('modal-sub');
-      await spinWheel(data.result);
-      if (subEl) {
-        subEl.textContent = data.win > 0
-          ? `🎉 +${fmt(data.win)} COIN 獲得！`
-          : '残念... また次回！';
-      }
-    }
+    await callFn('processRoulette', {});
   } catch(e) {
     if (!e.message.includes('time') && !e.message.includes('processing'))
       console.error('roulette process:', e.message);
