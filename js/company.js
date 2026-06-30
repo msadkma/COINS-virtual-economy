@@ -4,7 +4,6 @@
 import { callFn, dbGet, dbSet, dbUpdate, auth, toast, fmt, r, esc,
          rankTotal } from './firebase.js';
 import { S, withSubmit, renderPanel } from './ui.js';
-import { pushMeta } from './auth.js';
 
 // ============================================================
 //  DB構造（companies/）
