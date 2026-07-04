@@ -19,8 +19,16 @@ const admin                  = require("firebase-admin");
 admin.initializeApp();
 const db = admin.database();
 
-// リージョン設定（東京）
+// リージョン設定（東京）とCORSオプション
 setGlobalOptions({ region: "asia-northeast1" });
+
+// onCall関数の共通オプション（CORS許可設定）
+const CALL_OPTS = {
+  cors: [
+    "https://msadkma.github.io",
+    /https:\/\/.*\.github\.io$/,
+  ],
+};
 
 // ============================================================
 //  定数
@@ -149,9 +157,70 @@ function hasAllTraits(owners, meta) {
 }
 
 // ============================================================
-//  チケット変換
+//  初期データ作成（ゲーム全体の初回セットアップ用）
+//  ログイン後にクライアントから1回だけ呼ばれる想定
 // ============================================================
-exports.useTicket = onCall(async (request) => {
+exports.ensureGameDefaults = onCall(CALL_OPTS, async (request) => {
+  requireAuth(request);
+  if (!await dbGet("roulette")) {
+    await dbSet("roulette", { next: Date.now()+3600000, bets:{}, last:null, processing:false });
+  }
+  if (!await dbGet("stocks")) {
+    const now = Date.now();
+    await dbSet("stocks", {
+      ALPHA:{ name:"Alpha Corp", price:100, history:[100], nextUpdate:now+43200000 },
+      BETA: { name:"Beta Inc",   price:80,  history:[80],  nextUpdate:now+43200000 },
+      GAMMA:{ name:"Gamma Ltd",  price:50,  history:[50],  nextUpdate:now+43200000 },
+    });
+  }
+  if (!await dbGet("companies")) {
+    await dbSet("companies", {});
+  }
+  return { ok:true };
+});
+
+
+exports.registerPlayer = onCall(CALL_OPTS, async (request) => {
+  const uid  = requireAuth(request);
+  const { name } = request.data;
+  if (!name || !name.trim()) throw new HttpsError("invalid-argument","プレイヤー名が必要です");
+
+  const existing = await dbGet(`players/${uid}`);
+  if (existing) throw new HttpsError("already-exists","既に登録済みです");
+
+  const now = Date.now();
+  const trait = TRAITS[Math.floor(Math.random()*TRAITS.length)];
+  const np = {
+    id: uid, name: name.trim(),
+    coins: 0, tickets: 0, rareTickets: 0,
+    lastTicketTime: now,
+    deposit: null, depositBalance: 0,
+    termDeposit: null, termDepositBalance: 0,
+    rouletteBet: 0, holdings: {}, investedCost: 0,
+    lastDailyBonus: 0, lastFirstBonus: 0,
+    trait,
+  };
+  await dbSet(`players/${uid}`, np);
+  await pushMeta(uid, np);
+  return { ok:true, trait };
+});
+
+// ============================================================
+//  特性が未設定の既存ユーザーへの付与（ログイン時に呼ばれる）
+// ============================================================
+exports.ensureTrait = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const p   = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+  if (p.trait) return { trait: p.trait, changed:false };
+  const trait = TRAITS[Math.floor(Math.random()*TRAITS.length)];
+  await dbPatch(`players/${uid}`, { trait });
+  await pushMeta(uid, {...p, trait});
+  return { trait, changed:true };
+});
+
+
+exports.useTicket = onCall(CALL_OPTS, async (request) => {
   const uid  = requireAuth(request);
   const { type, count } = request.data;
   if (!["normal","rare"].includes(type)) throw new HttpsError("invalid-argument","Invalid type");
@@ -188,7 +257,7 @@ exports.useTicket = onCall(async (request) => {
 // ============================================================
 //  預金
 // ============================================================
-exports.deposit = onCall(async (request) => {
+exports.deposit = onCall(CALL_OPTS, async (request) => {
   const uid    = requireAuth(request);
   const { action, amount, days } = request.data;
   const p      = await dbGet(`players/${uid}`);
@@ -259,7 +328,7 @@ exports.deposit = onCall(async (request) => {
 // ============================================================
 //  ルーレット ベット
 // ============================================================
-exports.rouletteBet = onCall(async (request) => {
+exports.rouletteBet = onCall(CALL_OPTS, async (request) => {
   const uid   = requireAuth(request);
   const { bets, total } = request.data;
   if (!bets || total <= 0) throw new HttpsError("invalid-argument","ベットデータが不正です");
@@ -340,7 +409,7 @@ async function processRouletteInternal() {
 }
 
 // 手動トリガー（クライアントからの呼び出し）
-exports.processRoulette = onCall(async (request) => {
+exports.processRoulette = onCall(CALL_OPTS, async (request) => {
   requireAuth(request);
   return processRouletteInternal();
 });
@@ -353,7 +422,7 @@ exports.scheduledRoulette = onSchedule("0 * * * *", async () => {
 // ============================================================
 //  投資 売買
 // ============================================================
-exports.invest = onCall(async (request) => {
+exports.invest = onCall(CALL_OPTS, async (request) => {
   const uid             = requireAuth(request);
   const { action, symbol, qty } = request.data;
   const p      = await dbGet(`players/${uid}`);
@@ -436,7 +505,7 @@ async function updateStockPricesInternal() {
   return updated;
 }
 
-exports.updateStockPrices = onCall(async (request) => {
+exports.updateStockPrices = onCall(CALL_OPTS, async (request) => {
   requireAuth(request);
   return { updated: await updateStockPricesInternal() };
 });
@@ -592,7 +661,7 @@ exports.scheduledCompanyUpdate = onSchedule("30 */12 * * *", async () => {
 // ============================================================
 //  特性変更
 // ============================================================
-exports.changeTrait = onCall(async (request) => {
+exports.changeTrait = onCall(CALL_OPTS, async (request) => {
   const uid = requireAuth(request);
   const p   = await dbGet(`players/${uid}`);
   if (!p) throw new HttpsError("not-found","Player not found");
@@ -611,7 +680,7 @@ exports.changeTrait = onCall(async (request) => {
 // ============================================================
 //  会社 起業
 // ============================================================
-exports.foundCompany = onCall(async (request) => {
+exports.foundCompany = onCall(CALL_OPTS, async (request) => {
   const uid              = requireAuth(request);
   const { name, price, shares } = request.data;
   if (!name || price<1 || shares<1)
@@ -651,7 +720,7 @@ exports.foundCompany = onCall(async (request) => {
 // ============================================================
 //  会社株 購入
 // ============================================================
-exports.buyCompanyStock = onCall(async (request) => {
+exports.buyCompanyStock = onCall(CALL_OPTS, async (request) => {
   const uid             = requireAuth(request);
   const { companyId, qty } = request.data;
   const c = await dbGet(`companies/${companyId}`);
@@ -681,7 +750,7 @@ exports.buyCompanyStock = onCall(async (request) => {
 // ============================================================
 //  会社株 売却
 // ============================================================
-exports.sellCompanyStock = onCall(async (request) => {
+exports.sellCompanyStock = onCall(CALL_OPTS, async (request) => {
   const uid             = requireAuth(request);
   const { companyId, qty } = request.data;
   const c = await dbGet(`companies/${companyId}`);
@@ -713,7 +782,7 @@ exports.sellCompanyStock = onCall(async (request) => {
 // ============================================================
 //  希望株価設定
 // ============================================================
-exports.setDesiredPrice = onCall(async (request) => {
+exports.setDesiredPrice = onCall(CALL_OPTS, async (request) => {
   const uid               = requireAuth(request);
   const { companyId, desiredPrice } = request.data;
   const c = await dbGet(`companies/${companyId}`);
@@ -730,7 +799,7 @@ exports.setDesiredPrice = onCall(async (request) => {
 // ============================================================
 //  共同経営者招待・承認・拒否
 // ============================================================
-exports.inviteCoOwner = onCall(async (request) => {
+exports.inviteCoOwner = onCall(CALL_OPTS, async (request) => {
   const uid                    = requireAuth(request);
   const { companyId, targetName } = request.data;
   const c = await dbGet(`companies/${companyId}`);
@@ -749,7 +818,7 @@ exports.inviteCoOwner = onCall(async (request) => {
   return { ok:true };
 });
 
-exports.acceptInvite = onCall(async (request) => {
+exports.acceptInvite = onCall(CALL_OPTS, async (request) => {
   const uid         = requireAuth(request);
   const { companyId } = request.data;
   const p = await dbGet(`players/${uid}`);
@@ -762,7 +831,7 @@ exports.acceptInvite = onCall(async (request) => {
   return { ok:true };
 });
 
-exports.rejectInvite = onCall(async (request) => {
+exports.rejectInvite = onCall(CALL_OPTS, async (request) => {
   const uid         = requireAuth(request);
   const { companyId } = request.data;
   await dbPatch(`companies/${companyId}/invites/${uid}`, { status:"rejected" });
@@ -772,7 +841,7 @@ exports.rejectInvite = onCall(async (request) => {
 // ============================================================
 //  会社解散
 // ============================================================
-exports.dissolveCompany = onCall(async (request) => {
+exports.dissolveCompany = onCall(CALL_OPTS, async (request) => {
   const uid         = requireAuth(request);
   const { companyId } = request.data;
   const c = await dbGet(`companies/${companyId}`);
