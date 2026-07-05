@@ -155,13 +155,13 @@ function buildHome(p) {
   const hToMid     = Math.floor(sToMid/3600);
   const mToMid     = Math.floor((sToMid%3600)/60);
 
-  // 特性情報（バフ説明付き）
+  // 特性情報（ui.js内ではインライン定義）
   const traitMap = {
     worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%' },
-    manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'補正COINを2倍受け取る' },
+    manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'1位補正ボーナスを2倍受け取る' },
     negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への影響力が2倍' },
     balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率が常に20%' },
-    accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金・定期預金の利率が20%アップ' },
+    accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期2.4%/日' },
   };
   const trait    = p.trait || null;
   const traitInfo= trait ? traitMap[trait] : null;
@@ -179,13 +179,14 @@ function buildHome(p) {
   </div>
 
   ${traitInfo ? `
-  <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e0ddd8;
-               border-radius:8px;padding:8px 14px;margin-bottom:12px">
-    <span style="font-size:20px">${traitInfo.icon}</span>
-    <span style="font-size:13px;font-weight:700;color:${traitInfo.color}">${traitInfo.label}</span>
-    <span class="hint">特性</span>
-    <span class="spacer"></span>
-    <button class="btn btn-sm" onclick="W.changeTrait()"
+  <div style="display:flex;align-items:center;gap:10px;background:#fff;border:2px solid ${traitInfo.color};
+               border-radius:10px;padding:10px 14px;margin-bottom:12px">
+    <span style="font-size:24px">${traitInfo.icon}</span>
+    <div style="flex:1">
+      <div style="font-weight:700;color:${traitInfo.color};font-size:14px">${traitInfo.label}</div>
+      <div style="font-size:12px;color:#555;margin-top:2px">🎯 ${traitInfo.buff}</div>
+    </div>
+    <button class="btn btn-sm" onclick="W.showTraitModal('${trait}')"
             ${(p.coins||0)<2000?'disabled':''}>変更 (2000 C)</button>
   </div>` : `
   <div style="background:#fff;border:1px solid #e0ddd8;border-radius:8px;padding:8px 14px;margin-bottom:12px">
