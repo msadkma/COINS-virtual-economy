@@ -128,15 +128,56 @@ export function initAuth(onLogin, onLogout) {
   });
 }
 
-// ---- 特性変更（Cloud Functions版：サーバー側で2000COIN検証） ----
-export async function changeTrait() {
+// ---- 特性情報 ----
+export const TRAIT_INFO = {
+  worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%（付与間隔が半分になる）' },
+  manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'1位補正ボーナスを2倍受け取る' },
+  negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への自分の影響力が2倍になる' },
+  balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率が常に20%（逆転ボーナス無関係）' },
+  accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期預金2.4%/日（通常の1.2倍）' },
+};
+
+// ---- 特性変更モーダルを表示 ----
+export function showTraitModal(currentTrait) {
+  const existing = document.getElementById('trait-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'trait-modal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;
+    display:flex;align-items:center;justify-content:center;padding:20px`;
+  const cards = Object.entries(TRAIT_INFO).map(([key, t]) => {
+    const isCurrent = key === currentTrait;
+    return `<div style="border:2px solid ${isCurrent ? t.color : '#e0ddd8'};border-radius:10px;
+                padding:12px;cursor:${isCurrent?'default':'pointer'};background:${isCurrent?'#f9f8f6':'#fff'};
+                opacity:${isCurrent?'0.6':'1'}"
+              onclick="${isCurrent ? '' : `W._selectTrait('${key}')`}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:20px">${t.icon}</span>
+        <span style="font-weight:700;color:${t.color}">${t.label}</span>
+        ${isCurrent ? '<span style="font-size:11px;background:#e0ddd8;padding:2px 6px;border-radius:4px">現在</span>' : ''}
+      </div>
+      <div style="font-size:12px;color:#555">${t.buff}</div>
+    </div>`;
+  }).join('');
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:100%">
+      <div style="font-weight:800;font-size:16px;margin-bottom:6px">特性を選択（2000 COIN）</div>
+      <div style="font-size:12px;color:#888;margin-bottom:16px">現在の特性とは異なる特性を選んでください</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">${cards}</div>
+      <button onclick="document.getElementById('trait-modal').remove()"
+        style="width:100%;padding:9px;border:1px solid #ccc;border-radius:7px;
+               background:#fff;cursor:pointer;font-size:13px">キャンセル</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+// ---- 特性変更実行 ----
+export async function changeTrait(newTrait) {
   try {
-    const data = await callFn('changeTrait', {});
-    const traitMap = {
-      worker:'仕事人', manager:'経営者', negotiator:'交渉者',
-      balancer:'バランサー', accountant:'会計士',
-    };
-    toast(`特性が「${traitMap[data.newTrait]}」に変更されました (-2000 COIN)`);
+    const data = await callFn('changeTrait', { newTrait });
+    const t = TRAIT_INFO[data.newTrait];
+    document.getElementById('trait-modal')?.remove();
+    toast(`特性が「${t.label}」に変更されました (-2000 COIN)`);
   } catch(e) {
     toast('エラー: ' + e.message);
   }
