@@ -132,20 +132,13 @@ export function currentBetUsage(p) {
   return r((p.rouletteBet||0)+(p.investedCost||0));
 }
 
-// ---- 逆転ボーナス（特性バフ込み・表示用） ----
-export function calcTicketInterval(p, playersMeta) {
-  const avg   = avgAsset(playersMeta);
-  if (avg <= 0) return 60000;
-  const ratio = Math.min(1, rankTotal(p)/avg);
-  const base  = r(30000+ratio*30000);
-  return p.trait === "worker" ? r(base*0.5) : base;
+// ---- 逆転ボーナスは廃止（デイリーボーナスのみに集約） ----
+// チケット間隔・レア確率は特性のみで決まる
+export function calcTicketInterval(p) {
+  return p.trait === "worker" ? Math.round(60000 * (2/3)) : 60000;
 }
-export function calcRareProb(p, playersMeta) {
-  if (p.trait === "balancer") return 0.20;
-  const avg   = avgAsset(playersMeta);
-  if (avg <= 0) return 0.10;
-  const ratio = Math.min(1, rankTotal(p)/avg);
-  return 0.20 - ratio*0.10;
+export function calcRareProb(p) {
+  return p.trait === "balancer" ? 0.20 : 0.10;
 }
 
 // ---- Firebase リアルタイム購読 ----
