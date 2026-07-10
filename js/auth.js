@@ -130,11 +130,11 @@ export function initAuth(onLogin, onLogout) {
 
 // ---- 特性情報 ----
 export const TRAIT_INFO = {
-  worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%（付与間隔が半分になる）' },
+  worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度が通常の1.5倍（40秒/枚）' },
   manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'1位補正ボーナスを2倍受け取る' },
-  negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への自分の影響力が2倍になる' },
-  balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率が常に20%（逆転ボーナス無関係）' },
-  accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期預金2.4%/日（通常の1.2倍）' },
+  negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への購入影響力が2倍' },
+  balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率+10%（通常10%→20%）' },
+  accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期2.4%/日（通常の1.2倍）' },
 };
 
 // ---- 特性変更モーダルを表示 ----
