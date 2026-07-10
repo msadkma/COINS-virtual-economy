@@ -92,8 +92,7 @@ export function updateMetricsOnly() {
   if (!S.uid) return;
   S.now = Date.now();
   const p = S.players[S.uid]; if (!p) return;
-  const interval = calcTicketInterval(p, S.playersMeta);
-  const elapsed  = S.now - (p.lastTicketTime||S.now);
+  const interval = calcTicketInterval(p); // 引数なし
   const secLeft  = Math.ceil(Math.max(0, interval - elapsed%interval) / 1000);
   const totalT   = (p.tickets||0) + (p.rareTickets||0);
   const {depBal, tdepBal} = calcInterestWithTrait(p);
@@ -128,16 +127,15 @@ export function updateMetricsOnly() {
 // ============================================================
 function buildHome(p) {
   const now      = S.now;
-  const interval = calcTicketInterval(p, S.playersMeta);
+  const interval = calcTicketInterval(p); // 引数なし
   const elapsed  = now - (p.lastTicketTime||now);
   const secLeft  = Math.ceil(Math.max(0, interval - elapsed%interval) / 1000);
   const totalT   = (p.tickets||0) + (p.rareTickets||0);
-  const {depBal, tdepBal} = calcInterestWithTrait(p); // 会計士バフ適用
+  const {depBal, tdepBal} = calcInterestWithTrait(p);
   let invVal = 0;
   for (const [sym,qty] of Object.entries(p.holdings||{}))
     if (S.stocks[sym]) invVal += S.stocks[sym].price*(qty||0);
   invVal = r(invVal);
-  // 表示用総資産（利息・評価額込み）
   const displayTotal = r((p.coins||0) + depBal + tdepBal + (p.rouletteBet||0) + invVal);
   const nt = p.tickets||0, nr = p.rareTickets||0;
   const limit      = calcBetLimit(p, S.playersMeta);
@@ -147,7 +145,7 @@ function buildHome(p) {
   const avg        = avgAsset(S.playersMeta);
   const myTotal    = rankTotal(p);
   const isUnderAvg = myTotal < avg;
-  const rareProb   = r(calcRareProb(p, S.playersMeta)*100);
+  const rareProb   = r(calcRareProb(p)*100); // 引数なし
   const intervalSec= r(interval/1000);
   const nowDate    = new Date(now);
   const nextMid    = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()+1);
@@ -158,10 +156,11 @@ function buildHome(p) {
   // 特性情報（ui.js内ではインライン定義）
   const traitMap = {
     worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%' },
+    worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度が通常の1.5倍（40秒/枚）' },
     manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'1位補正ボーナスを2倍受け取る' },
-    negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への影響力が2倍' },
-    balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率が常に20%' },
-    accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期2.4%/日' },
+    negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への購入影響力が2倍' },
+    balancer:  { label:'バランサー',color:'#27ae60', icon:'⚖', buff:'レアチケット確率+10%（通常10%→20%）' },
+    accountant:{ label:'会計士',    color:'#8e44ad', icon:'📊', buff:'預金1.2%/日・定期2.4%/日（通常の1.2倍）' },
   };
   const trait    = p.trait || null;
   const traitInfo= trait ? traitMap[trait] : null;
@@ -197,11 +196,9 @@ function buildHome(p) {
   <div class="bonus-indicator">
     <span style="font-size:20px">📈</span>
     <div>
-      <div style="font-weight:700;font-size:13px">逆転ボーナス発動中</div>
-      <div class="hint">チケット付与: <strong>${intervalSec}秒</strong>/枚 |
-           レアチケット確率: <strong>${rareProb}%</strong></div>
-      <div class="hint">デイリーボーナスまで:
-           <strong>${hToMid}時間${mToMid}分</strong></div>
+      <div style="font-weight:700;font-size:13px">デイリー逆転ボーナス対象</div>
+      <div class="hint">総資産が全体平均を下回っています</div>
+      <div class="hint">次回ボーナスまで: <strong>${hToMid}時間${mToMid}分</strong></div>
     </div>
   </div>` : ''}
 
