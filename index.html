@@ -1,337 +1,108 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏛 COINS架空市場</title>
-<!-- DIN Condensed フォント（数値用） -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap"
-      rel="stylesheet">
-<style>
-/* ---- リセット ---- */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
-     font-size:14px;background:#f5f4f1;color:#1a1a1a;min-height:100vh}
-
-/* ---- DIN Condensed を数値に適用 ---- */
-.din{font-family:'Barlow Condensed',system-ui,sans-serif;font-weight:700;letter-spacing:.5px}
-
-#app{min-height:100vh}
-
-/* ---- ヘッダー ---- */
-.header{background:#fff;border-bottom:1px solid #e0ddd8;padding:10px 16px;
-        display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
-.logo{font-weight:800;font-size:15px}
-.spacer{flex:1}
-
-/* ---- タブ ---- */
-.tab-bar{display:flex;background:#fff;border-bottom:1px solid #e0ddd8;
-         overflow-x:auto;scrollbar-width:none}
-.tab-bar::-webkit-scrollbar{display:none}
-.tab{padding:10px 13px;border:none;background:none;cursor:pointer;font-size:13px;
-     color:#666;border-bottom:2.5px solid transparent;white-space:nowrap;
-     font-family:inherit;transition:all .15s}
-.tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:700}
-.tab:hover:not(.active){background:#f5f4f1;color:#1a1a1a}
-.panel{padding:14px;max-width:680px;margin:0 auto}
-
-/* ---- カード ---- */
-.card{background:#fff;border:1px solid #e0ddd8;border-radius:10px;
-      padding:14px 16px;margin-bottom:12px}
-.card-title{font-weight:700;font-size:14px;margin-bottom:10px}
-
-/* ---- メトリクス ---- */
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-.metric{background:#fff;border:1px solid #e0ddd8;border-radius:8px;padding:10px;text-align:center}
-.ml{font-size:11px;color:#888;margin-bottom:3px}
-.mv{font-size:22px;font-weight:700}
-.mu{font-size:11px;color:#888;font-weight:400;font-family:system-ui}
-
-/* ---- ボタン ---- */
-.btn{padding:7px 14px;border:1px solid #ccc;border-radius:7px;background:#fff;
-     cursor:pointer;font-size:13px;color:#1a1a1a;font-family:inherit;
-     transition:all .15s;white-space:nowrap}
-.btn:hover:not(:disabled){background:#f0ede8}
-.btn:active:not(:disabled){transform:scale(.98)}
-.btn:disabled{opacity:.4;cursor:not-allowed}
-.btn-sm{padding:5px 10px;font-size:12px}
-.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
-.btn-primary:hover:not(:disabled){background:#333}
-.btn-danger{border-color:#c0392b;color:#c0392b}
-.btn-danger:hover:not(:disabled){background:#fff5f5}
-.btn-gold{border-color:#b8860b;color:#6b4c00;background:#fffbf0}
-.btn-gold:hover:not(:disabled){background:#fff0c0}
-
-/* ---- 入力 ---- */
-.input{padding:7px 10px;border:1px solid #ccc;border-radius:7px;
-       background:#fff;color:#1a1a1a;font-size:13px;font-family:inherit}
-.input:focus{outline:2px solid #1a1a1a;outline-offset:1px}
-
-/* ---- レイアウト ---- */
-.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hint{font-size:12px;color:#888}
-.hint-label{font-size:13px;color:#555}
-
-/* ---- バッジ ---- */
-.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-.badge-dark  {background:#1a1a1a;color:#fff}
-.badge-blue  {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.badge-green {background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
-.badge-red   {background:#fff0f0;color:#991b1b;border:1px solid #fecaca}
-.badge-purple{background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff}
-.badge-gold  {background:#fffbf0;color:#7a5c00;border:1px solid #d4a800}
-.badge-orange{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
-
-/* ---- プログレス ---- */
-.progress-bar {height:5px;background:#e5e3de;border-radius:3px;overflow:hidden}
-.progress-fill{height:100%;background:#1a1a1a;transition:width 1s linear}
-.limit-bar    {height:8px;background:#e5e3de;border-radius:4px;overflow:hidden;margin-top:6px}
-.limit-fill   {height:100%;border-radius:4px;transition:width .3s}
-
-/* ---- フォーム ---- */
-.err{color:#c0392b;font-size:12px;margin-top:6px;padding:6px 10px;
-     background:#fff0f0;border-radius:6px;border:1px solid #fecaca}
-.login-wrap {display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-card {background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:28px;
-             width:100%;max-width:340px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-.login-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:4px}
-.login-sub  {font-size:12px;color:#888;text-align:center;margin-bottom:20px}
-.mode-btns  {display:flex;border:1px solid #ccc;border-radius:7px;overflow:hidden;margin-bottom:18px}
-.mode-btn   {flex:1;padding:9px;border:none;background:#fff;cursor:pointer;
-             font-size:13px;color:#666;font-family:inherit;transition:all .15s}
-.mode-btn.active{background:#1a1a1a;color:#fff;font-weight:700}
-.form-group {margin-bottom:14px}
-.form-label {font-size:12px;color:#555;margin-bottom:5px;display:block;font-weight:600}
-
-/* ---- チケット ---- */
-.ticket-section {background:#f9f8f6;border:1px solid #e8e5e0;border-radius:8px;padding:10px 12px}
-.ticket-row     {display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.ticket-label   {font-size:13px;font-weight:600;flex:1}
-.ticket-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-
-/* ---- 逆転ボーナス ---- */
-.bonus-indicator{background:linear-gradient(135deg,#fff7ed,#fef3c7);
-                 border:1px solid #f59e0b;border-radius:8px;
-                 padding:10px 14px;margin-bottom:12px;
-                 display:flex;align-items:center;gap:10px}
-
-/* ---- ルーレット ---- */
-.r-cell{padding:5px 2px;text-align:center;border-radius:4px;cursor:pointer;
-        font-size:11px;font-weight:700;border:2px solid transparent;
-        transition:all .1s;user-select:none;line-height:1.2;position:relative}
-.r-cell:hover{opacity:.8;transform:scale(1.08)}
-.r-cell.sel  {border-color:#fff!important;box-shadow:0 0 0 2px #1a1a1a}
-.r-red  {background:#c0392b;color:#fff;border-color:#c0392b}
-.r-black{background:#2c2c2c;color:#fff;border-color:#2c2c2c}
-.r-green{background:#1d9e75;color:#fff;border-color:#1d9e75}
-.r-out  {background:#f0ede8;color:#1a1a1a;border:1px solid #ccc}
-.r-out.sel{border:2px solid #1a1a1a!important;box-shadow:none}
-.other-bet-dot{position:absolute;top:1px;right:2px;width:5px;height:5px;
-               background:#f39c12;border-radius:50%;border:1px solid rgba(255,255,255,.8)}
-
-/* ---- ランキング ---- */
-.rank-row     {display:flex;align-items:center;gap:10px;padding:9px 6px;
-               border-radius:8px;border-bottom:1px solid #e0ddd8}
-.rank-row:last-child{border-bottom:none}
-.rank-row.me  {background:#f5f4f1}
-.rank-num     {font-size:18px;width:28px;text-align:center}
-.price-up {color:#166534}
-.price-down{color:#991b1b}
-
-/* ---- トースト ---- */
-.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;
-       background:#1a1a1a;color:#fff;border-radius:8px;font-size:13px;
-       z-index:9999;max-width:280px;animation:fadeIn .2s ease;pointer-events:none}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-
-/* ---- ルーレットモーダル ---- */
-.roulette-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;
-                display:flex;flex-direction:column;align-items:center;
-                justify-content:center;gap:20px;padding:20px}
-.roulette-modal.hidden{display:none}
-.wheel-wrap   {position:relative;width:260px;height:260px}
-.wheel-canvas {border-radius:50%;
-               box-shadow:0 0 0 6px #8B6914,0 0 0 10px #5a4208,0 6px 30px rgba(0,0,0,.6)}
-.wheel-pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);
-               width:0;height:0;border-left:10px solid transparent;
-               border-right:10px solid transparent;border-top:22px solid #e74c3c;
-               filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
-.wheel-center {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-               width:28px;height:28px;
-               background:radial-gradient(circle,#f5e642,#c9a800);
-               border-radius:50%;border:3px solid #8B6914;
-               box-shadow:0 0 8px rgba(0,0,0,.4)}
-.modal-result {font-family:'Barlow Condensed',system-ui,sans-serif;
-               font-size:36px;font-weight:700;color:#fff;
-               text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:44px;text-align:center}
-.modal-sub    {font-size:15px;color:#ddd;text-align:center;min-height:24px}
-.modal-btn    {padding:10px 28px;background:#fff;color:#1a1a1a;border:none;
-               border-radius:8px;font-size:14px;cursor:pointer;
-               font-family:inherit;font-weight:700;transition:all .15s}
-.modal-btn:hover{background:#eee}
-.modal-btn.hidden{display:none}
-
-@media(max-width:480px){
-  .metrics{grid-template-columns:repeat(2,1fr)}
-  .tab{padding:9px 10px;font-size:12px}
-}
-</style>
+  <meta charset="UTF-8">
+  <title>架空経済プラットフォーム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* 共通テーマスタイル（環境に合わせて調整してください） */
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f7fa; color: #2c3e50; margin: 0; padding: 15px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e1e8ed; }
+    .card-header { background: #f8f9fa; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e1e8ed; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+    .card-body { padding: 15px; }
+    .row { display: flex; align-items: center; justify-content: space-between; }
+    .spacer { flex: 1; }
+    .din { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+    .input { padding: 8px 12px; border: 1px solid #ccd6dd; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #3498db; color: white; }
+    .btn-warning { background: #f39c12; color: white; }
+    .btn-success { background: #2ecc71; color: white; }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-dark { background: #34495e; color: white; }
+    .btn-secondary { background: #95a5a6; color: white; }
+    .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+    .tab-btn { flex: 1; padding: 10px; background: #e1e8ed; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; text-align: center; }
+    .tab-btn.active { background: #34495e; color: white; }
+    .hint { font-size: 12px; color: #7f8c8d; margin-top: 2px; }
+    .font-green { color: #27ae60; }
+    .font-orange { color: #e67e22; }
+    
+    /* トースト通知用スタイル */
+    #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: 90%; max-width: 400px; }
+    .toast-item { background: rgba(0,0,0,0.85); color: white; padding: 12px 16px; border-radius: 6px; font-size: 14px; margin-top: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.3s ease; text-align: center; white-space: pre-line; }
+    .toast-item.show { opacity: 1; transform: translateY(0); }
+    body.loading { opacity: 0.7; pointer-events: none; }
+  </style>
 </head>
 <body>
 
-<div id="app">
-  <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#888">
-    <div style="text-align:center">
-      <div style="font-size:40px;margin-bottom:16px">🏛</div>
-      <div>読み込み中...</div>
-    </div>
-  </div>
-</div>
-<div id="toasts"></div>
+<div class="container">
+  <div id="game-header" class="card" style="padding:15px; background: #fff;"></div>
 
-<!-- ルーレット演出モーダル -->
-<div class="roulette-modal hidden" id="roulette-modal">
-  <div class="wheel-wrap">
-    <canvas class="wheel-canvas" id="wheel-canvas" width="260" height="260"></canvas>
-    <div class="wheel-pointer"></div>
-    <div class="wheel-center"></div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ranking" onclick="W.switchTab('ranking')">🏆 ランキング</button>
+    <button class="tab-btn" data-tab="deposit" onclick="W.switchTab('deposit')">🏦 銀行預金</button>
+    <button class="tab-btn" data-tab="invest" onclick="W.switchTab('invest')">📈 株式投資</button>
   </div>
-  <div class="modal-result" id="modal-result">🎰 スピン中...</div>
-  <div class="modal-sub"    id="modal-sub"></div>
-  <button class="modal-btn hidden" id="modal-close-btn"
-          onclick="W._closeModal()">閉じる</button>
+
+  <div id="main-content"></div>
 </div>
+
+<div id="toast-container"></div>
 
 <script type="module">
-import { auth, dbGet, subscribeAll, toast, callFn } from './js/firebase.js';
-import { S, scheduleRender, doRender, renderPanel,
-         withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
-import { renderLogin, login, logout,
-         initAuth, changeTrait,
-         showTraitModal, TRAIT_INFO }              from './js/auth.js';
-import { useTicket }                               from './js/tickets.js';
-import { doDeposit, addDeposit, withdrawDeposit,
-         doTermDeposit, withdrawTermDeposit }       from './js/deposit.js';
-import { placeBet, toggleBet, clearBets,
-         watchRouletteResult }                      from './js/roulette.js';
-import { buyStock, sellStock }                      from './js/invest.js';
-import { foundCompany, inviteCoOwner,
-         acceptInvite, rejectInvite,
-         buyCompanyStock, sellCompanyStock,
-         dissolveCompany, depositToBudget,
-         resignFromCompany }                        from './js/company.js';
-import { onValue, ref, off }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { auth, subscribeAll } from './js/firebase.js';
+  import { S, render, switchTab } from './js/ui.js';
+  
+  // 各UIファイルから関数をインポート
+  import { depositCoins, addDepositCoins, withdrawDeposit, claimWithdrawal, createTermDeposit, withdrawTermDeposit } from './js/deposit.js';
+  import { buyStock, sellStock } from './js/invest.js';
 
-// ---- 初期データ保証 ----
-// Cloud Functions の ensureGameDefaults を呼び、まだなければサーバー側で作成する
-async function ensureDefaults() {
-  try { await callFn('ensureGameDefaults', {}); } catch(_) {}
-}
+  // 【最重要】HTML内の onclick="W.〇〇" から呼び出せるようにオブジェクトへ明示的に登録
+  const W = {};
+  window.W = W;
 
-// ---- 会社データの購読 ----
-let companyUnsub = null;
-function subscribeCompanies() {
-  const db2 = getDatabase();
-  const cRef = ref(db2, 'companies');
-  if (companyUnsub) { try { off(cRef); } catch(_){} }
-  companyUnsub = onValue(cRef, snap => {
-    S.companies = snap.val() || {};
-    if (!S.submitting) scheduleRender();
-  });
-}
+  // 共通UI系
+  W.switchTab = switchTab;
 
-// ============================================================
-//  定期チェック（10秒ごと）
-//  ★ Cloud Functions移行後は、実際の処理（チケット付与・ルーレット開催・
-//    株価更新・配当・デイリーボーナス・1位補正）はすべてサーバー側の
-//    スケジュール実行（functions/index.js の onSchedule）が自動で行う。
-//  クライアント側はルーレットの結果が変化したら演出を表示するだけでよい。
-// ============================================================
-async function periodicCheck() {
-  if (!S.uid) return;
-  await watchRouletteResult(S).catch(() => {});
-}
+  // 預金システム用（翌日引き出し・確定機能を追加登録）
+  W.depositCoins = depositCoins;
+  W.addDepositCoins = addDepositCoins;
+  W.withdrawDeposit = withdrawDeposit;
+  W.claimWithdrawal = claimWithdrawal; // 新設
+  W.createTermDeposit = createTermDeposit;
+  W.withdrawTermDeposit = withdrawTermDeposit;
 
-// ---- 公開API ----
-window.W = {
-  // 内部ヘルパー
-  _setMode(m)  { S.lmode=m; S.lerr=''; renderLogin(); },
-  _setTab(t)   { S.tab=t; scheduleRender(); },
-  _toggleBet(type) { toggleBet(type); },
-  _clearBets() { clearBets(); },
-  _qt(kind,n)  {
-    const el = document.getElementById(kind==='n'?'conv-n':'conv-r');
-    if (el) el.value = String(n);
-  },
-  _closeModal(){ document.getElementById('roulette-modal').classList.add('hidden'); },
+  // 株式投資用
+  W.buyStock = buyStock;
+  W.sellStock = sellStock;
 
-  // 認証
-  login, logout,
-
-  // チケット
-  useTicket,
-
-  // 預金
-  doDeposit, addDeposit, withdrawDeposit,
-  doTermDeposit, withdrawTermDeposit,
-
-  // ルーレット
-  placeBet,
-
-  // 投資
-  buyStock, sellStock,
-
-  // 特性
-  changeTrait,
-  showTraitModal,
-  _selectTrait(key) { changeTrait(key); },
-
-  // 会社
-  foundCompany, inviteCoOwner,
-  acceptInvite, rejectInvite,
-  buyCompanyStock, sellCompanyStock,
-  dissolveCompany, depositToBudget,
-  resignFromCompany,
-};
-
-window._toast = toast;
-
-// ---- 起動 ----
-async function main() {
-  renderLogin();
-  initAuth(
-    async (user) => {
-      await ensureDefaults();
-      const p = await dbGet(`players/${S.uid}`);
-      if (p) { S.pname = p.name; }
-      subscribeAll(S.uid, {
-        onPlayer:   v => { if(v){ S.players[S.uid]=v; if(!S.submitting) scheduleRender(); } },
-        onMeta:     v => { S.playersMeta=v||{};       if(!S.submitting) scheduleRender(); },
-        onRoulette: v => { S.roulette=v;              if(!S.submitting) scheduleRender(); },
-        onStocks:   v => { S.stocks=v||{};            if(!S.submitting) scheduleRender(); },
+  // Firebase認証の監視 & リアルタイムデータ購読の開始
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      S.uid = user.uid;
+      
+      // 各データの変更をリアルタイムに検知して画面に自動反映
+      subscribeAll(user.uid, {
+        onPlayer: (data) => { S.player = data; render(); },
+        onMeta:   (data) => { S.playersMeta = data || {}; render(); },
+        onStocks: (data) => { S.stocks = data || {}; render(); },
+        onRoulette: (data) => { S.roulette = data || {}; render(); },
+        onCompanies: (data) => { S.companies = data || {}; render(); } // 会社データ用拡張
       });
-      subscribeCompanies(); // 会社データの購読
-      S.tab='home';
-      scheduleRender();
-    },
-    () => { resetMain(); renderLogin(); }
-  );
-  setInterval(updateMetricsOnly, 1000);
-  setInterval(periodicCheck, 10000);
-}
+    } else {
+      // 未ログイン時のフォールバック処理（必要に応じてログイン画面への誘導など）
+      document.getElementById('main-content').innerHTML = `
+        <div class="card"><div class="card-body" style="text-align:center;">認証されていません。ログインしてください。</div></div>
+      `;
+    }
+  });
 
-main().catch(e => {
-  console.error(e);
-  document.getElementById('app').innerHTML =
-    `<div style="padding:40px;color:#c0392b">
-       <h2>起動エラー</h2>
-       <p style="margin-top:8px;color:#444">${e.message}</p>
-     </div>`;
-});
+  // 初回表示
+  render();
 </script>
+
 </body>
 </html>
