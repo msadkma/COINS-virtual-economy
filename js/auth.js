@@ -26,6 +26,22 @@ export function renderLogin() {
         <label class="form-label">プレイヤー名（ゲーム内表示名）</label>
         <input class="input" id="l-name" type="text" placeholder="ニックネーム"
                autocomplete="nickname" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;
+                    padding:10px 12px;margin-bottom:8px">
+          <div style="font-weight:700;font-size:13px;color:#856404;margin-bottom:4px">
+            ⚠️ 本名の入力が必要です
+          </div>
+          <div style="font-size:12px;color:#856404;line-height:1.6">
+            このプラットフォームは限られたメンバーのみが参加しています。
+            なりすましや複数アカウントを防ぐため、<strong>必ず本名を入力してください。</strong>
+            入力された本名は運営者のみが確認できます。偽名での登録は参加資格の剥奪対象となります。
+          </div>
+        </div>
+        <label class="form-label">本名 <span style="color:#c0392b">*必須</span></label>
+        <input class="input" id="l-realname" type="text" placeholder="山田 太郎"
+               autocomplete="name" style="width:100%"/>
       </div>` : ''}
       <div class="form-group">
         <label class="form-label">メールアドレス <span class="hint">（架空でもOK）</span></label>
@@ -53,9 +69,10 @@ export function renderLogin() {
 
 // ---- ログイン・新規登録 ----
 export async function login() {
-  const email = document.getElementById('l-email')?.value.trim();
-  const pass  = document.getElementById('l-pass')?.value.trim();
-  const name  = document.getElementById('l-name')?.value.trim();
+  const email    = document.getElementById('l-email')?.value.trim();
+  const pass     = document.getElementById('l-pass')?.value.trim();
+  const name     = document.getElementById('l-name')?.value.trim();
+  const realName = document.getElementById('l-realname')?.value.trim();
   if (!email || !pass) {
     S.lerr = 'メールアドレスとパスワードを入力してください';
     renderLogin(); return;
@@ -64,20 +81,23 @@ export async function login() {
     S.lerr = 'プレイヤー名を入力してください';
     renderLogin(); return;
   }
+  if (S.lmode==='register' && !realName) {
+    S.lerr = '本名を入力してください（必須）';
+    renderLogin(); return;
+  }
   S.submitting = true;
   try {
     if (S.lmode==='register') {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       const uid  = cred.user.uid;
-      // 認証完了を待ってからCloud Functionsでプレイヤー作成
       await new Promise(resolve => {
         const unsub = onAuthStateChanged(auth, user => {
           if (user && user.uid===uid) { unsub(); resolve(); }
         });
       });
       S.uid = uid;
-      // ★ Cloud Functions経由でプレイヤーデータを作成（クライアント直接書き込みなし）
-      await callFn('registerPlayer', { name });
+      // 本名も一緒にサーバーへ送信（DBのplayers/{uid}/realNameに保存）
+      await callFn('registerPlayer', { name, realName });
       toast(`ようこそ、${name}さん！`);
     } else {
       const cred = await signInWithEmailAndPassword(auth, email, pass);
