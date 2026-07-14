@@ -131,23 +131,31 @@ export async function placeBet() {
 //  サーバー側のスケジュール実行が結果をDBに書き込むため、
 //  クライアントは roulette/last の変化を監視して演出を出すだけでよい
 // ============================================================
-let lastSeenResult = null;
+let lastSeenResultAt = 0;
 export async function watchRouletteResult(S) {
   const rd = S.roulette;
   if (!rd || rd.last == null) return;
-  if (lastSeenResult === rd.last) return; // 既に見た結果
-  lastSeenResult = rd.last;
-  // 自分が直前にベットしていたか確認するのは難しいため、
-  // ベット履歴のローカルフラグで判定
+  // lastUpdatedAt タイムスタンプで変化を検知（同じ数字連続でも検知可能）
+  const resultAt = rd.lastUpdatedAt || 0;
+  if (resultAt <= lastSeenResultAt) return;
+  lastSeenResultAt = resultAt;
+
   if (S._hadPendingBet) {
     S._hadPendingBet = false;
+    // 勝敗はサーバー側で精算済みなのでDBから最新の自分のcoinsを参照
     const subEl = document.getElementById('modal-sub');
     await spinWheel(rd.last);
-    if (subEl) subEl.textContent = '結果が確定しました！';
+    // 勝敗テキストはDBの winResult フィールドから取得
+    const winResult = rd.winResults?.[S.uid];
+    if (subEl) {
+      if (winResult != null && winResult > 0)
+        subEl.textContent = `🎉 +${fmt(winResult)} COIN 獲得！`;
+      else
+        subEl.textContent = '残念... また次回！';
+    }
   }
 }
 
-// 手動トリガー版（残しておくが通常は使わない）
 export async function processRoulette() {
   try {
     await callFn('processRoulette', {});
