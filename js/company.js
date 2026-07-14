@@ -99,8 +99,6 @@ export function buildCompany(p, S) {
       const isOwner    = c.ownerId === S.uid;
       const amOwner    = Object.keys(c.owners||{}).includes(S.uid);
       const allTraits  = hasAllTraits(c.owners, S.playersMeta);
-      const bonusRate  = allTraits ? 2 : 1;
-      const myDesired  = c.desiredPrices?.[S.uid] ?? null;
       const chg        = c.history?.length > 1
         ? r(c.price) - r(c.history[c.history.length-2]) : 0;
       const pts        = (c.history||[c.price]).map((v,i,a) => {
@@ -128,7 +126,7 @@ export function buildCompany(p, S) {
         <div class="hint" style="margin-bottom:8px">
           流通株数: <span class="din">${fmt(c.circulatingShares||0)}</span> /
           総発行株数: <span class="din">${fmt(c.totalShares||0)}</span> |
-          売却ボーナス: <span class="din">${bonusRate}</span> COIN/株 |
+          会社予算: <span class="din">${fmt(r(c.totalBudget||0))}</span> C |
           次回株価更新まで ${Math.max(0,Math.floor(((c.nextUpdate||0)-Date.now())/3600000))}時間
         </div>
 
@@ -145,22 +143,14 @@ export function buildCompany(p, S) {
 
         ${amOwner ? `
         <div style="margin-bottom:8px">
-          <label class="form-label">希望株価を設定（現在価格の1/2〜2倍の範囲）</label>
+          <label class="form-label">会社予算に入金する</label>
           <div class="row" style="gap:6px">
-            <input class="input" id="dp-${c.id}" type="number"
-                   min="${r(c.price*0.5)}" max="${r(c.price*2)}"
-                   value="${myDesired ?? r(c.price)}" style="width:120px"/>
+            <input class="input" id="budget-${c.id}" type="number"
+                   min="1" placeholder="入金額" style="width:120px"/>
             <button class="btn btn-primary"
-                    onclick="W.setDesiredPrice('${c.id}')">設定</button>
-            <span class="hint">
-              現在の設定: ${myDesired!=null ? fmt(myDesired)+' C' : '未設定（本来の変動を採用）'}
-            </span>
+                    onclick="W.depositToBudget('${c.id}')">入金</button>
+            <span class="hint">自分の積立: <span class="din">${fmt(c.budget?.[S.uid]?.deposited||0)}</span> C</span>
           </div>
-          ${Object.entries(c.desiredPrices||{}).map(([uid,dp]) =>
-            `<div class="hint" style="margin-top:3px">
-              ${esc(c.owners[uid]?.name||'???')}: <span class="din">${fmt(dp)}</span> C
-            </div>`
-          ).join('')}
         </div>
         ` : ''}
 
@@ -181,8 +171,15 @@ export function buildCompany(p, S) {
         ` : ''}
 
         <div class="row" style="gap:6px;margin-top:6px">
-          <button class="btn btn-danger btn-sm"
-                  onclick="W.dissolveCompany('${c.id}')">会社を解散</button>
+          ${isOwner ? `
+            <button class="btn btn-danger btn-sm"
+                    onclick="if(confirm('本当に解散しますか？株主への補填が発生します'))W.dissolveCompany('${c.id}')">
+              会社を解散（起業者のみ）
+            </button>` : `
+            <button class="btn btn-sm"
+                    onclick="if(confirm('退職しますか？預けたお金は返還されません'))W.resignFromCompany('${c.id}')">
+              退職する
+            </button>`}
         </div>
       </div>`;
     }
@@ -287,17 +284,21 @@ export async function foundCompany() {
 // ============================================================
 //  希望株価設定
 // ============================================================
-export async function setDesiredPrice(companyId) {
+export async function depositToBudget(companyId) {
   await withSubmit(async () => {
-    const c  = S.companies?.[companyId];
-    if (!c) { toast("会社が見つかりません"); return; }
-    const dp = r(parseFloat(document.getElementById(`dp-${companyId}`)?.value)||0);
-    const min = r(c.price*0.5), max = r(c.price*2);
-    if (dp < min || dp > max) {
-      toast(`希望株価は ${fmt(min)}〜${fmt(max)} COINの範囲で設定してください`); return;
-    }
-    await callFn("setDesiredPrice", { companyId, desiredPrice: dp });
-    toast(`希望株価を ${fmt(dp)} C に設定しました`);
+    const amount = r(parseFloat(document.getElementById(`budget-${companyId}`)?.value)||0);
+    if (amount <= 0) { toast('金額を入力してください'); return; }
+    const c = S.companies?.[companyId];
+    const data = await callFn('depositToBudget', { companyId, amount });
+    toast(`${fmt(amount)} COINを会社予算に入金しました（予算合計: ${fmt(data.newTotal)} C）`);
+  });
+}
+
+export async function resignFromCompany(companyId) {
+  await withSubmit(async () => {
+    const c = S.companies?.[companyId];
+    await callFn('resignFromCompany', { companyId });
+    toast(`「${esc(c?.name||'')}」を退職しました`);
   });
 }
 
