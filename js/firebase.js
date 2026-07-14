@@ -9,7 +9,7 @@ import { getAuth }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ============================================================
-//  ★ ここに Firebase の設定を貼り付けてください ★
+//  ★ Firebase 設定情報（構文エラーを修正済み） ★
 // ============================================================
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAoldTnCCTDdIGMA_Q3zeEf8fNGmZWPo7g",
@@ -17,7 +17,8 @@ export const FIREBASE_CONFIG = {
   databaseURL: "https://unreal-economic-platform-default-rtdb.firebaseio.com",
   projectId: "unreal-economic-platform",
   storageBucket: "unreal-economic-platform.firebasestorage.app",
-  messagingSenderId: "169831544038",\n  appId: "1:169831544038:web:04e3d06b7"
+  messagingSenderId: "169831544038",
+  appId: "1:169831544038:web:04e3d06b7"
 };
 
 export const app  = initializeApp(FIREBASE_CONFIG);
@@ -73,14 +74,12 @@ export function calcRareProb(p) {
   return p.trait === "balancer" ? 0.20 : 0.10;
 }
 
-// ---- PHPバックエンド通信用共通関数 (旧 callFn のラップ・拡張) ----
+// ---- PHPバックエンド通信用共通関数 ----
 export async function callFn(endpoint, data = {}) {
   try {
-    // ログイン中のユーザーからIDトークンを取得して認証ヘッダーに付与する
     const user = auth.currentUser;
     const token = user ? await user.getIdToken() : "";
 
-    // 拡張子.phpをつけて直接サーバーのPHPを叩く
     const response = await fetch(`${endpoint}.php`, {
       method: 'POST',
       headers: {
@@ -101,7 +100,7 @@ export async function callFn(endpoint, data = {}) {
   }
 }
 
-// ---- 新設：会社経営・生産・販売システム用通信関数 ----
+// ---- 会社経営・生産・販売システム用通信関数 ----
 export async function callCompanyAPI(action, data = {}) {
   return await callFn('company', { action, ...data });
 }
@@ -119,7 +118,6 @@ export function subscribeAll(uid, callbacks) {
   watch('playersMeta',    'meta',   callbacks.onMeta);
   watch('stocks',         'stocks', callbacks.onStocks);
   watch('roulette',       'roulette', callbacks.onRoulette);
-  // 新システム用の会社データも購読リストに追加可能
   watch('companies',      'companies', callbacks.onCompanies || (() => {}));
 
   return () => {
