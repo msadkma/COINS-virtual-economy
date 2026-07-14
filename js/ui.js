@@ -8,6 +8,7 @@ import { buildRoulette } from './roulette.js';
 import { buildInvest }   from './invest.js';
 import { buildRanking }  from './ranking.js';
 import { buildCompany }  from './company.js';
+import { buildRules }    from './rules.js';
 
 // ---- アプリ状態 ----
 export const S = {
@@ -40,6 +41,7 @@ function buildShell(p) {
     {id:'invest',   icon:'📈', label:'投資'},
     {id:'company',  icon:'🏢', label:'会社'},
     {id:'ranking',  icon:'🏆', label:'ランキング'},
+    {id:'rules',    icon:'📖', label:'ルール'},
   ];
   if (!mainRendered) {
     mainRendered = true;
@@ -71,6 +73,7 @@ export function renderPanel(p) {
   if (S.tab==='invest')   html = buildInvest(p, S);
   if (S.tab==='company')  html = buildCompany(p, S);
   if (S.tab==='ranking')  html = buildRanking(S);
+  if (S.tab==='rules')    html = buildRules();
   panel.innerHTML = html;
 }
 
@@ -92,7 +95,8 @@ export function updateMetricsOnly() {
   if (!S.uid) return;
   S.now = Date.now();
   const p = S.players[S.uid]; if (!p) return;
-  const interval = calcTicketInterval(p); // 引数なし
+  const interval = calcTicketInterval(p);
+  const elapsed  = S.now - (p.lastTicketTime||S.now);
   const secLeft  = Math.ceil(Math.max(0, interval - elapsed%interval) / 1000);
   const totalT   = (p.tickets||0) + (p.rareTickets||0);
   const {depBal, tdepBal} = calcInterestWithTrait(p);
@@ -155,7 +159,6 @@ function buildHome(p) {
 
   // 特性情報（ui.js内ではインライン定義）
   const traitMap = {
-    worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度 +50%' },
     worker:    { label:'仕事人',    color:'#e74c3c', icon:'⚒', buff:'チケット生成速度が通常の1.5倍（40秒/枚）' },
     manager:   { label:'経営者',    color:'#2980b9', icon:'👔', buff:'1位補正ボーナスを2倍受け取る' },
     negotiator:{ label:'交渉者',    color:'#f39c12', icon:'🤝', buff:'株価への購入影響力が2倍' },
