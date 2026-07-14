@@ -1,10 +1,9 @@
 // ============================================================
-//  js/ui.js  メインUI管理・画面レンダリング統合版
+//  js/ui.js  メインUI管理・画面レンダリング統合版（エラー修正版）
 // ============================================================
 import { auth, fmt, r, esc, rankTotal, calcBetLimit, currentBetUsage } from './firebase.js';
 import { buildRanking } from './ranking.js';
 import { buildInvest } from './invest.js';
-// 【修正】新しく作成した deposit.js からUIビルド関数を読み込む
 import { buildDeposit } from './deposit.js';
 
 // グローバル状態オブジェクト
@@ -14,8 +13,8 @@ export const S = {
   playersMeta: {},
   stocks: {},
   roulette: {},
-  companies: {}, // 会社システム用
-  currentTab: 'ranking' // 初期タブ
+  companies: {}, 
+  currentTab: 'ranking' 
 };
 
 // 連続クリック防止フラグ
@@ -66,7 +65,6 @@ function createToastContainer() {
  */
 export function switchTab(tabId) {
   S.currentTab = tabId;
-  // 全タブボタンの活性状態を更新
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
   });
@@ -74,12 +72,11 @@ export function switchTab(tabId) {
 }
 
 /**
- * メインレンダリング関数（データ更新時に自動で呼び出される）
+ * メインレンダリング関数
  */
 export function render() {
   if (!S.player) return;
 
-  // 1. ヘッダー情報の更新（所持金、ユーザー名など）
   const p = S.player;
   const myTotal = rankTotal(p);
   const myLimit = calcBetLimit(p, S.playersMeta);
@@ -108,7 +105,6 @@ export function render() {
   const headerEl = document.getElementById('game-header');
   if (headerEl) headerEl.innerHTML = headerHtml;
 
-  // 2. 現在 アクティブなタブ コンテンツの構築
   const mainContentEl = document.getElementById('main-content');
   if (!mainContentEl) return;
 
@@ -117,7 +113,6 @@ export function render() {
       mainContentEl.innerHTML = buildRanking(S);
       break;
     case 'deposit':
-      // 【修正】新しく書き換えた翌日引き出し予約・確定ロジックを含むUIを表示
       mainContentEl.innerHTML = buildDeposit(p, S);
       break;
     case 'invest':
