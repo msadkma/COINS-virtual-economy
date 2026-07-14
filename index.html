@@ -217,10 +217,11 @@ import { doDeposit, addDeposit, withdrawDeposit,
 import { placeBet, toggleBet, clearBets,
          watchRouletteResult }                      from './js/roulette.js';
 import { buyStock, sellStock }                      from './js/invest.js';
-import { foundCompany, setDesiredPrice, inviteCoOwner,
+import { foundCompany, inviteCoOwner,
          acceptInvite, rejectInvite,
          buyCompanyStock, sellCompanyStock,
-         dissolveCompany }                          from './js/company.js';
+         dissolveCompany, depositToBudget,
+         resignFromCompany }                        from './js/company.js';
 import { onValue, ref, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -290,10 +291,11 @@ window.W = {
   _selectTrait(key) { changeTrait(key); },
 
   // 会社
-  foundCompany, setDesiredPrice, inviteCoOwner,
+  foundCompany, inviteCoOwner,
   acceptInvite, rejectInvite,
   buyCompanyStock, sellCompanyStock,
-  dissolveCompany,
+  dissolveCompany, depositToBudget,
+  resignFromCompany,
 };
 
 window._toast = toast;
