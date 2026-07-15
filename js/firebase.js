@@ -56,6 +56,9 @@ export function avgAsset(playersMeta) {
   return totalAssetsAll(playersMeta) / metas.length;
 }
 
+// 【エラー対策補填】ranking.jsが要求しているダミー関数を定義してエラーを完全に防ぐ
+export function calcInterest() { return 0; }
+
 // ---- 賭け上限（修正版） ----
 export function calcBetLimit(p, playersMeta) {
   const my    = rankTotal(p);
@@ -97,9 +100,7 @@ export function subscribeAll(uid, callbacks) {
   };
 }
 
-// ============================================================
-//  ★【安全な追記】PHP通信用共通API関数（deposit.php呼び出し用）★
-// ============================================================
+// ---- PHPバックエンド通信用共通関数（新規追加分） ----
 export async function callFn(endpoint, data = {}) {
   try {
     const user = auth.currentUser;
@@ -116,7 +117,7 @@ export async function callFn(endpoint, data = {}) {
 
     const resData = await response.json();
     if (!response.ok || !resData.ok) {
-      throw new Error(resData.error || `通信エラー (${response.status})`);
+      throw new Error(resData.error || `Server Error (${response.status})`);
     }
     return resData;
   } catch (error) {
