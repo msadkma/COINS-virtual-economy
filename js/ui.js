@@ -1,5 +1,5 @@
 // ============================================================
-//  js/ui.js  メインUI管理・画面レンダリング統合版（翌日預金引き出し対応）
+//  js/ui.js  メインUI管理・画面レンダリング統合版
 // ============================================================
 import { auth, fmt, r, esc, rankTotal, calcBetLimit, currentBetUsage, callFn } from './firebase.js';
 import { buildRanking } from './ranking.js';
@@ -70,7 +70,7 @@ export function switchTab(tabId) {
 }
 
 // ============================================================
-//  ★ 通常預金・定期預金用アクション関数（最小限の変更と新設）★
+//  通常預金・定期預金用操作関数
 // ============================================================
 
 export async function depositCoins() {
@@ -145,7 +145,7 @@ export async function withdrawTermDeposit() {
 }
 
 // ============================================================
-//  ★ 元のデザインを100%活かした預金UI構築処理 ★
+//  元のデザインを100%活かした預金UI構築処理
 // ============================================================
 function buildDeposit(p) {
   const now = Date.now();
@@ -178,8 +178,8 @@ function buildDeposit(p) {
             確定予定日時: <strong>${timeStr}</strong>
           </div>
           ${isAvailable 
-            ? `<button class="btn btn-success" style="width:100%; font-weight:700;" onclick="W.claimWithdrawal()">💰 コインを受け取る</button>`
-            : `<button class="btn btn-secondary" style="width:100%; cursor:not-allowed;" disabled>⏳ まだ確定時間になっていません</button>`
+            ? `<button class="btn btn-primary" style="width:100%; font-weight:700; background:#2ecc71;" onclick="W.claimWithdrawal()">💰 コインを受け取る</button>`
+            : `<button class="btn" style="width:100%; background:#95a5a6; color:#fff; cursor:not-allowed;" disabled>⏳ まだ確定時間になっていません</button>`
           }
         </div>
       </div>
@@ -207,13 +207,12 @@ function buildDeposit(p) {
       <div class="hint" style="color: ${isMatured ? '#27ae60':'#c0392b'}; font-weight:bold; margin-top:5px;">
         ${isMatured ? '🎉 満期を達成しました！' : `⏳ 満期まであと ${Math.ceil(td.days - elapsedDays)} 日`}
       </div>
-      <button class="btn btn-danger" style="width:100%; margin-top:10px;" onclick="W.withdrawTermDeposit()">
+      <button class="btn" style="width:100%; margin-top:10px; background:#e74c3c; color:#fff;" onclick="W.withdrawTermDeposit()">
         ${isMatured ? '定期預金を引き出す' : '中途解約して元本を引き出す'}
       </button>
     `;
   }
 
-  // 元のHTMLを完全に踏襲して組み立て
   return `
     <div class="deposit-container">
       <div class="card">
@@ -235,7 +234,7 @@ function buildDeposit(p) {
               <button class="btn btn-primary" onclick="W.addDepositCoins()">追加入金</button>
             </div>
             ${!reservation ? `
-              <button class="btn btn-warning" style="width:100%; font-weight:700;" onclick="W.withdrawDeposit()">
+              <button class="btn btn-primary" style="width:100%; font-weight:700; background:#f39c12;" onclick="W.withdrawDeposit()">
                 📤 預金の引き出し申請を行う (翌日確定払い)
               </button>
             ` : ''}
@@ -253,7 +252,7 @@ function buildDeposit(p) {
               <input class="input" id="term-amount" type="number" min="1" placeholder="預入額" style="flex:2"/>
               <input class="input" id="term-days" type="number" min="7" value="7" placeholder="日数" style="flex:1"/>
             </div>
-            <button class="btn btn-dark" style="width:100%;" onclick="W.createTermDeposit()">定期預金を開始する (最低7日)</button>
+            <button class="btn" style="width:100%; background:#34495e; color:#fff;" onclick="W.createTermDeposit()">定期預金を開始する (最低7日)</button>
           ` : termInfoHtml}
         </div>
       </div>
@@ -262,7 +261,7 @@ function buildDeposit(p) {
 }
 
 // ============================================================
-//  ★ メイン描画処理 ★
+//  メイン描画処理
 // ============================================================
 export function render() {
   if (!S.player) return;
