@@ -56,8 +56,12 @@ export function avgAsset(playersMeta) {
   return totalAssetsAll(playersMeta) / metas.length;
 }
 
-// 【エラー対策補填】ranking.jsが要求しているダミー関数を定義してエラーを完全に防ぐ
+// 【エラー対策補填1】ranking.jsが要求しているダミー関数を定義してエラーを完全に防ぐ
 export function calcInterest() { return 0; }
+
+// 【エラー対策補填2】invest.jsが誤ってここからimportしようとしているtoastをui.jsから中継する
+import { toast as uiToast } from './ui.js';
+export function toast(msg) { uiToast(msg); }
 
 // ---- 賭け上限（修正版） ----
 export function calcBetLimit(p, playersMeta) {
