@@ -1,5 +1,5 @@
 // ============================================================
-//  js/firebase.js  Firebase初期化・API呼び出し・共通ロジック版
+//  js/firebase.js  Firebase初期化・Cloud Functions呼び出し版
 // ============================================================
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -7,9 +7,11 @@ import { getDatabase, ref, get, set, update, onValue, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFunctions, httpsCallable }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 
 // ============================================================
-//  ★ Firebase 設定情報（構文エラーを修正済み） ★
+//  ★ ここに Firebase の設定を貼り付けてください ★
 // ============================================================
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAoldTnCCTDdIGMA_Q3zeEf8fNGmZWPo7g",
@@ -54,7 +56,7 @@ export function avgAsset(playersMeta) {
   return totalAssetsAll(playersMeta) / metas.length;
 }
 
-// ---- 賭け上限 ----
+// ---- 賭け上限（修正版） ----
 export function calcBetLimit(p, playersMeta) {
   const my    = rankTotal(p);
   const all   = totalAssetsAll(playersMeta);
@@ -67,6 +69,8 @@ export function currentBetUsage(p) {
   return r((p.rouletteBet||0)+(p.investedCost||0));
 }
 
+// ---- 逆転ボーナスは廃止（デイリーボーナスのみに集約） ----
+// チケット間隔・レア確率は特性のみで決まる
 export function calcTicketInterval(p) {
   return p.trait === "worker" ? Math.round(60000 * (2/3)) : 60000;
 }
@@ -74,7 +78,28 @@ export function calcRareProb(p) {
   return p.trait === "balancer" ? 0.20 : 0.10;
 }
 
-// ---- PHPバックエンド通信用共通関数 ----
+// ---- Firebase リアルタイム購読 ----
+export function subscribeAll(uid, callbacks) {
+  const unsubs = {};
+  const watch  = (path, key, fn) => {
+    const rf = ref(db, path);
+    if (unsubs[key]) { try { off(rf); } catch(_){} }
+    unsubs[key] = onValue(rf, snap => fn(snap.val()));
+  };
+
+  watch(`players/${uid}`, 'player', callbacks.onPlayer);
+  watch('playersMeta',    'meta',   callbacks.onMeta);
+  watch('stocks',         'stocks', callbacks.onStocks);
+  watch('roulette',       'roulette', callbacks.onRoulette);
+
+  return () => {
+    for (const k in unsubs) { try { off(ref(db, k === 'player' ? `players/${uid}` : k)); } catch(_){} }
+  };
+}
+
+// ============================================================
+//  ★【安全な追記】PHP通信用共通API関数（deposit.php呼び出し用）★
+// ============================================================
 export async function callFn(endpoint, data = {}) {
   try {
     const user = auth.currentUser;
@@ -91,36 +116,11 @@ export async function callFn(endpoint, data = {}) {
 
     const resData = await response.json();
     if (!response.ok || !resData.ok) {
-      throw new Error(resData.error || `Server Error (${response.status})`);
+      throw new Error(resData.error || `通信エラー (${response.status})`);
     }
     return resData;
   } catch (error) {
     console.error(`API Error [${endpoint}]:`, error);
     throw error;
   }
-}
-
-// ---- 会社経営・生産・販売システム用通信関数 ----
-export async function callCompanyAPI(action, data = {}) {
-  return await callFn('company', { action, ...data });
-}
-
-// ---- Firebase リアルタイム購読 ----
-export function subscribeAll(uid, callbacks) {
-  const unsubs = {};
-  const watch  = (path, key, fn) => {
-    const rf = ref(db, path);
-    if (unsubs[key]) { try { off(rf); } catch(_){} }
-    unsubs[key] = onValue(rf, snap => fn(snap.val()));
-  };
-
-  watch(`players/${uid}`, 'player', callbacks.onPlayer);
-  watch('playersMeta',    'meta',   callbacks.onMeta);
-  watch('stocks',         'stocks', callbacks.onStocks);
-  watch('roulette',       'roulette', callbacks.onRoulette);
-  watch('companies',      'companies', callbacks.onCompanies || (() => {}));
-
-  return () => {
-    for (const k in unsubs) { try { off(ref(db, k === 'player' ? `players/${uid}` : k)); } catch(_){} }
-  };
 }
