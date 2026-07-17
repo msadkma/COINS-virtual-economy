@@ -22,12 +22,9 @@ const db = admin.database();
 // リージョン設定（東京）とCORSオプション
 setGlobalOptions({ region: "asia-northeast1" });
 
-// onCall関数の共通オプション（CORS許可設定）
+// onCall関数の共通オプション（全オリジン許可・IDトークン検証で安全性担保）
 const CALL_OPTS = {
-  cors: [
-    "https://msadkma.github.io",
-    /https:\/\/.*\.github\.io$/,
-  ],
+  cors: true,
 };
 
 // ============================================================
@@ -205,21 +202,24 @@ exports.ensureGameDefaults = onCall(CALL_OPTS, async (request) => {
 
 exports.registerPlayer = onCall(CALL_OPTS, async (request) => {
   const uid  = requireAuth(request);
-  const { name } = request.data;
+  const { name, realName } = request.data;
   if (!name || !name.trim()) throw new HttpsError("invalid-argument","プレイヤー名が必要です");
+  if (!realName || !realName.trim()) throw new HttpsError("invalid-argument","本名が必要です");
 
   const existing = await dbGet(`players/${uid}`);
   if (existing) throw new HttpsError("already-exists","既に登録済みです");
 
-  const now = Date.now();
+  const now   = Date.now();
   const trait = TRAITS[Math.floor(Math.random()*TRAITS.length)];
-  const np = {
+  const np    = {
     id: uid, name: name.trim(),
+    realName: realName.trim(), // 本名（運営者のみ確認可能）
     coins: 0, tickets: 0, rareTickets: 0,
     lastTicketTime: now,
     deposit: null, depositBalance: 0,
     termDeposit: null, termDepositBalance: 0,
     rouletteBet: 0, holdings: {}, investedCost: 0,
+    companyInvested: 0,
     lastDailyBonus: 0, lastFirstBonus: 0,
     trait,
   };
@@ -313,11 +313,26 @@ exports.deposit = onCall(CALL_OPTS, async (request) => {
 
   if (action === "withdraw") {
     if (!p.deposit) throw new HttpsError("failed-precondition","預金がありません");
-    const bal = r(p.deposit.principal * Math.pow(dRate,(now-p.deposit.since)/86400000));
-    const upd = { coins:coins+bal, deposit:null, depositBalance:0 };
-    await dbPatch(`players/${uid}`, upd);
-    await pushMeta(uid, {...p,...upd});
-    return { returned: bal };
+    // 翌日反映制度: 引き出しリクエストを pending として保存
+    const now2 = Date.now();
+    const todayMid = new Date(now2);
+    todayMid.setHours(0,0,0,0);
+    const tomorrowMid = todayMid.getTime() + 86400000;
+    await dbPatch(`players/${uid}`, {
+      "deposit/pendingWithdrawal": true,
+      "deposit/withdrawalScheduled": tomorrowMid,
+    });
+    await pushMeta(uid, {...p, deposit:{...p.deposit, pendingWithdrawal:true}});
+    return { scheduled: tomorrowMid, message:"翌日0時に引き出し処理されます" };
+  }
+
+  if (action === "cancel_withdraw") {
+    // 引き出しキャンセル
+    await dbPatch(`players/${uid}`, {
+      "deposit/pendingWithdrawal": false,
+      "deposit/withdrawalScheduled": null,
+    });
+    return { ok:true };
   }
 
   if (action === "term_deposit") {
@@ -339,10 +354,25 @@ exports.deposit = onCall(CALL_OPTS, async (request) => {
     const ret     = matured
       ? r(p.termDeposit.principal * Math.pow(tdRate, elapsed))
       : r(p.termDeposit.principal);
-    const upd = { coins:coins+ret, termDeposit:null, termDepositBalance:0 };
-    await dbPatch(`players/${uid}`, upd);
-    await pushMeta(uid, {...p,...upd});
-    return { returned:ret, matured };
+    // 翌日反映制度
+    const todayMidTd = new Date(now); todayMidTd.setHours(0,0,0,0);
+    const tomorrowMidTd = todayMidTd.getTime() + 86400000;
+    await dbPatch(`players/${uid}`, {
+      "termDeposit/pendingWithdrawal":   true,
+      "termDeposit/withdrawalScheduled": tomorrowMidTd,
+      "termDeposit/withdrawalAmount":    ret,
+    });
+    return { scheduled: tomorrowMidTd, returned: ret, matured };
+  }
+
+  if (action === "cancel_term_withdraw") {
+    if (!p.termDeposit) throw new HttpsError("failed-precondition","定期預金がありません");
+    await dbPatch(`players/${uid}`, {
+      "termDeposit/pendingWithdrawal":   false,
+      "termDeposit/withdrawalScheduled": null,
+      "termDeposit/withdrawalAmount":    null,
+    });
+    return { ok:true };
   }
 
   throw new HttpsError("invalid-argument","Unknown action");
@@ -401,24 +431,24 @@ async function processRouletteInternal() {
   const now = Date.now();
   if (now < rd.next) return { skipped:true };
 
-  // processingがtrueの場合、5分以上経過していればデッドロックとみなして解除
+  // processingがtrueの場合、30秒以上経過していればデッドロックとみなして解除
   if (rd.processing) {
     const stuckSince = rd.processingSince || 0;
-    if (now - stuckSince < 5 * 60 * 1000) {
+    if (now - stuckSince < 30 * 1000) {
       return { skipped:true, reason:"already_processing" };
     }
-    // デッドロック解除
     await dbPatch("roulette", { processing:false, processingSince:null });
   }
 
-  // ロック取得（processingSinceで取得時刻を記録）
+  // ロック取得
   await dbPatch("roulette", { processing:true, processingSince:now });
   try {
-    const result = WHEEL_ORDER[Math.floor(Math.random()*38)];
-    const bets   = rd.bets || {};
-    const results = {};
-
+    const result  = WHEEL_ORDER[Math.floor(Math.random()*38)];
+    // betsをDBから直接取得（rdのスナップショットではなく最新値を使用）
+    const bets    = (await dbGet("roulette/bets")) || {};
+    const results    = {};
     const winResults = {};
+
     for (const [uid, bet] of Object.entries(bets)) {
       const p = await dbGet(`players/${uid}`);
       if (!p) continue;
@@ -433,15 +463,15 @@ async function processRouletteInternal() {
       await db.ref(`roulette/bets/${uid}`).remove();
       await pushMeta(uid, {...p,...upd});
       winResults[uid] = win;
-      results[uid] = { result, win };
+      results[uid]    = { result, win };
     }
     await dbPatch("roulette", {
-      next:           now + 3600000,
-      last:           result,
-      lastUpdatedAt:  now,  // タイムスタンプで変化検知
-      winResults,           // 各プレイヤーの獲得COIN
-      processing:     false,
-      processingSince:null,
+      next:            now + 3600000,
+      last:            result,
+      lastUpdatedAt:   now,
+      winResults,
+      processing:      false,
+      processingSince: null,
     });
     return { result, results };
   } catch(e) {
@@ -499,15 +529,18 @@ exports.invest = onCall(CALL_OPTS, async (request) => {
     if (!s) throw new HttpsError("not-found","銘柄が見つかりません");
     if ((p.holdings?.[symbol]||0) < qty)
       throw new HttpsError("failed-precondition","保有数が不足しています");
-    const rev       = r(s.price * qty);
-    const totalHeld = Object.values(p.holdings||{}).reduce((a,b)=>a+b,0);
-    const avgCost   = totalHeld > 0 ? (p.investedCost||0)/totalHeld : 0;
-    const holdings  = {...(p.holdings||{})};
-    holdings[symbol] = r((holdings[symbol]||0)-qty);
+    const rev     = r(s.price * qty);
+    // ★ investedCostからは「売却株数 × 1株あたりの取得原価」を差し引く
+    // 売却時の市場価格ではなく購入時のコストを使うことで利益・損失が混入しない
+    const totalHeld  = Object.values(p.holdings||{}).reduce((a,b)=>a+b, 0);
+    const costPerUnit= totalHeld > 0 ? (p.investedCost||0) / totalHeld : 0;
+    const costReduced= r(costPerUnit * qty);
+    const holdings   = {...(p.holdings||{})};
+    holdings[symbol] = r((holdings[symbol]||0) - qty);
     const upd = {
       coins:        r((p.coins||0)+rev),
       holdings,
-      investedCost: Math.max(0,r((p.investedCost||0)-r(avgCost*qty))),
+      investedCost: Math.max(0, r((p.investedCost||0) - costReduced)),
     };
     await dbPatch(`players/${uid}`, upd);
     await pushMeta(uid, {...p,...upd});
@@ -561,7 +594,8 @@ exports.updateStockPrices = onCall(CALL_OPTS, async (request) => {
   return { updated: await updateStockPricesInternal() };
 });
 
-exports.scheduledStockUpdate = onSchedule("0 */12 * * *", async () => {
+// 自動スケジュール（毎分チェック：nextUpdateを過ぎたら即実行）
+exports.scheduledStockUpdate = onSchedule("* * * * *", async () => {
   await updateStockPricesInternal();
 });
 
@@ -594,7 +628,7 @@ exports.scheduledTickets = onSchedule("* * * * *", async () => {
 });
 
 // ============================================================
-//  デイリーボーナス（スケジュール：毎日0時）
+//  デイリーボーナス + 預金翌日反映処理（毎日0時）
 // ============================================================
 exports.scheduledDailyBonus = onSchedule("0 0 * * *", async () => {
   const meta   = await dbGet("playersMeta") || {};
@@ -604,32 +638,64 @@ exports.scheduledDailyBonus = onSchedule("0 0 * * *", async () => {
     .map(([uid,m])=>({uid,rt:m.rankTotal||0,trait:m.trait}))
     .sort((a,b)=>b.rt-a.rt);
   const first  = rows[0]?.rt || 0;
+  const now    = Date.now();
 
   for (const row of rows) {
     const p = await dbGet(`players/${row.uid}`);
     if (!p) continue;
-    const myRt = rankTotal(p);
+    const myRt   = rankTotal(p);
+    const dRate  = depositRate(p);
+    const tdRate = termDepositRate(p);
 
-    // 逆転ボーナス（平均以下）
-    if (myRt < avg) {
-      const bonus = Math.max(1, r((avg-myRt)*0.05));
+    // ── 普通預金の翌日引き出し処理 ──
+    if (p.deposit?.pendingWithdrawal && now >= (p.deposit.withdrawalScheduled||0)) {
+      const bal = r(p.deposit.principal * Math.pow(dRate, (now-p.deposit.since)/86400000));
       await dbPatch(`players/${row.uid}`, {
-        coins:          r((p.coins||0)+bonus),
-        lastDailyBonus: Date.now(),
+        coins:          r((p.coins||0)+bal),
+        deposit:        null,
+        depositBalance: 0,
+      });
+      await pushMeta(row.uid, {...p, coins:r((p.coins||0)+bal), deposit:null, depositBalance:0});
+    }
+
+    // ── 定期預金の翌日引き出し処理 ──
+    if (p.termDeposit?.pendingWithdrawal && now >= (p.termDeposit.withdrawalScheduled||0)) {
+      const elapsed = (now - p.termDeposit.since) / 86400000;
+      const matured = elapsed >= p.termDeposit.days;
+      const ret     = matured
+        ? r(p.termDeposit.principal * Math.pow(tdRate, elapsed))
+        : r(p.termDeposit.principal);
+      const pp = await dbGet(`players/${row.uid}`);
+      await dbPatch(`players/${row.uid}`, {
+        coins:              r((pp.coins||0)+ret),
+        termDeposit:        null,
+        termDepositBalance: 0,
+      });
+      await pushMeta(row.uid, {...pp, coins:r((pp.coins||0)+ret), termDeposit:null});
+    }
+
+    // ── 逆転ボーナス（平均以下）──
+    const freshP = await dbGet(`players/${row.uid}`);
+    if (!freshP) continue;
+    const freshRt = rankTotal(freshP);
+    if (freshRt < avg) {
+      const bonus = Math.max(1, r((avg-freshRt)*0.05));
+      await dbPatch(`players/${row.uid}`, {
+        coins:          r((freshP.coins||0)+bonus),
+        lastDailyBonus: now,
       });
     }
 
-    // 1位補正ボーナス（修正済み計算式）
-    if (myRt < first && first > 0) {
-      const base  = Math.floor(((first/(myRt+1)-1)/100+1)*myRt);
-      let   bonus = base - myRt;
+    // ── 1位補正ボーナス ──
+    if (freshRt < first && first > 0) {
+      const base  = Math.floor(((first/(freshRt+1)-1)/100+1)*freshRt);
+      let   bonus = base - freshRt;
       if (bonus > 0) {
-        // 経営者バフ: 2倍
-        if (p.trait === "manager") bonus *= 2;
-        const pp = await dbGet(`players/${row.uid}`);
+        if (freshP.trait === "manager") bonus *= 2;
+        const pp2 = await dbGet(`players/${row.uid}`);
         await dbPatch(`players/${row.uid}`, {
-          coins:          r((pp.coins||0)+bonus),
-          lastFirstBonus: Date.now(),
+          coins:          r((pp2.coins||0)+bonus),
+          lastFirstBonus: now,
         });
       }
     }
@@ -639,78 +705,84 @@ exports.scheduledDailyBonus = onSchedule("0 0 * * *", async () => {
 });
 
 // ============================================================
-//  会社株価更新・配当（スケジュール：12時間ごと / 週次）
+//  会社株価更新・配当（毎分チェック・予算制度対応版）
 // ============================================================
-exports.scheduledCompanyUpdate = onSchedule("30 */12 * * *", async () => {
+exports.scheduledCompanyUpdate = onSchedule("* * * * *", async () => {
   const companies = await dbGet("companies") || {};
-  const meta      = await dbGet("playersMeta") || {};
+  const now       = Date.now();
 
   for (const [id, c] of Object.entries(companies)) {
-    if (Date.now() >= (c.nextUpdate||0)) {
-      const cur     = c.price || 1;
-      const circ    = Math.max(1, c.circulatingShares||1);
-      const capital = c.capital || cur;
-      // 希望株価廃止: 起業資金/流通株数 × ノイズのみ
-      const base        = capital / circ;
-      const noise       = 1 + (Math.random()-0.5)*0.04;
-      const newPrice    = Math.max(1, r(base * noise));
-      const history     = [...(c.history||[cur]), newPrice].slice(-60);
+
+    // ── 株価更新（12時間ごと）──
+    if (now >= (c.nextUpdate||0)) {
+      const cur  = c.price || 1;
+      const circ = Math.max(1, c.circulatingShares||1);
+      // 予算合計 / 流通株数 × ノイズ
+      const budget    = c.totalBudget || (c.capital||cur);
+      const base      = budget / circ;
+      const noise     = 1 + (Math.random()-0.5)*0.04;
+      const newPrice  = Math.max(1, r(base * noise));
+      const history   = [...(c.history||[cur]), newPrice].slice(-60);
       await dbPatch(`companies/${id}`, {
-        price:newPrice, history,
-        nextUpdate: Date.now()+43200000,
+        price:     newPrice,
+        history,
+        nextUpdate: now + 43200000,
       });
     }
 
-    // 配当（週次）
-    if (Date.now() >= (c.nextDividend||0)) {
+    // ── 配当（週次）──
+    if (now >= (c.nextDividend||0)) {
       const shareholders = c.shareholders || {};
+      const price = (await dbGet(`companies/${id}/price`)) || c.price || 1;
       let totalDiv = 0;
-      const price  = (await dbGet(`companies/${id}/price`)) || c.price || 1;
+
+      // 株主へ配当支払い（株価×保有数×1%）
       for (const [shUid, qty] of Object.entries(shareholders)) {
         if (qty <= 0) continue;
-        const divAmt = Math.max(1, r(price*qty*0.01));
+        const divAmt = Math.max(1, r(price * qty * 0.01));
         const sp     = await dbGet(`players/${shUid}`);
-        if (sp) { await dbPatch(`players/${shUid}`,{coins:r((sp.coins||0)+divAmt)}); }
+        if (sp) await dbPatch(`players/${shUid}`, { coins: r((sp.coins||0)+divAmt) });
         totalDiv += divAmt;
       }
-      // 配当分を経営者から徴収
-      // ★ 起業者（ownerId）は利益を2倍受け取る（損失は均等）
-      const ownerUids   = Object.keys(c.owners||{});
-      const founderUid  = c.ownerId;
-      // 起業者が2倍受け取るため、分母を調整
-      // 例: 3人経営で起業者が1人の場合 → 起業者2票、他1票×2 = 合計4票
-      const totalWeight = ownerUids.reduce((s, uid) =>
-        s + (uid === founderUid ? 2 : 1), 0);
-      for (const ownerUid of ownerUids) {
-        const weight  = ownerUid === founderUid ? 2 : 1;
-        const receive = r(totalDiv * weight / totalWeight);
-        // 支払いは全員均等（損失均等）
-        const pay     = r(totalDiv / ownerUids.length);
-        const net     = receive - pay; // 差し引き
-        const op = await dbGet(`players/${ownerUid}`);
-        if (op) {
-          await dbPatch(`players/${ownerUid}`,{
-            coins: Math.max(0, r((op.coins||0) + net))
-          });
+
+      // 配当を会社予算から差し引き
+      const budgetAfterDiv = r((c.totalBudget||0) - totalDiv);
+      await dbPatch(`companies/${id}`, { totalBudget: budgetAfterDiv });
+
+      // ── 予算の利益を経営者に分配（起業者は2倍）──
+      // 予算がプラスの場合のみ利益分配
+      // 損益（マイナス）は積立比率で均等負担
+      const budget       = c.budget || {};
+      const founderUid   = c.ownerId;
+      // 退職していない経営者のみ対象
+      const activeOwners = Object.entries(budget).filter(([,b]) => !b.resigned);
+      if (activeOwners.length > 0) {
+        const totalDeposited = activeOwners.reduce((s,[,b])=>s+(b.deposited||0), 0);
+        // 起業者は2票、他は1票として重み付け
+        const totalWeight = activeOwners.reduce((s,[uid2,])=>
+          s + (uid2===founderUid ? 2 : 1), 0);
+
+        // 週次の純利益 = 今週の株価変動分 × 流通株数（簡易計算）
+        // 実際には予算残高の変化で判定
+        // 今週の予算変化 = 配当支払い後の予算 - 前回の予算
+        // ここでは簡易的に株価上昇分を利益として計算
+        const prevPrice = (c.history||[price]).slice(-2)[0] || price;
+        const priceGain = Math.max(0, r((price - prevPrice) * (c.totalShares - (c.circulatingShares||0))));
+
+        if (priceGain > 0) {
+          for (const [ownerUid,] of activeOwners) {
+            const weight  = ownerUid===founderUid ? 2 : 1;
+            const share   = r(priceGain * weight / totalWeight);
+            if (share <= 0) continue;
+            const op = await dbGet(`players/${ownerUid}`);
+            if (op) await dbPatch(`players/${ownerUid}`, { coins: r((op.coins||0)+share) });
+          }
         }
       }
-      // 売却ボーナス配布（起業者2倍）
-      const totalBonus = c.pendingBonus || 0;
-      if (totalBonus > 0) {
-        const totalBonusWeight = ownerUids.reduce((s, uid) =>
-          s + (uid === founderUid ? 2 : 1), 0);
-        for (const ownerUid of ownerUids) {
-          const weight     = ownerUid === founderUid ? 2 : 1;
-          const bonusShare = r(totalBonus * weight / totalBonusWeight);
-          if (bonusShare <= 0) continue;
-          const op = await dbGet(`players/${ownerUid}`);
-          if (op) { await dbPatch(`players/${ownerUid}`,{coins:r((op.coins||0)+bonusShare)}); }
-        }
-      }
+
       await dbPatch(`companies/${id}`, {
-        nextDividend:      Date.now()+7*86400000,
+        nextDividend:      now + 7*86400000,
         totalDividendPaid: r((c.totalDividendPaid||0)+totalDiv),
-        pendingBonus:      0,
       });
     }
   }
@@ -934,8 +1006,15 @@ exports.acceptInvite = onCall(CALL_OPTS, async (request) => {
   const p = await dbGet(`players/${uid}`);
   const c = await dbGet(`companies/${companyId}`);
   if (!p || !c) throw new HttpsError("not-found","データが見つかりません");
+  if (!c.invites?.[uid] || c.invites[uid].status !== "pending")
+    throw new HttpsError("failed-precondition","招待が見つかりません");
+  // owners に追加
   await dbPatch(`companies/${companyId}/owners`, {
-    [uid]: { name:p.name||"", capital:0, trait:p.trait||null }
+    [uid]: { name:p.name||"", trait:p.trait||null }
+  });
+  // budget に初期エントリを作成（積立額0でスタート）
+  await dbPatch(`companies/${companyId}/budget`, {
+    [uid]: { deposited:0, name:p.name||"", resigned:false }
   });
   await dbPatch(`companies/${companyId}/invites/${uid}`, { status:"accepted" });
   return { ok:true };
@@ -949,37 +1028,32 @@ exports.rejectInvite = onCall(CALL_OPTS, async (request) => {
 });
 
 // ============================================================
-//  会社解散
-//  ・株主には購入時の金額を起業者が補填（株は$0でシステムに返却）
-//  ・起業者は起業時の資金が無駄になる上に補填分だけ追加損失
+//  会社解散（予算制度対応版）
+//  ・株主への補填は会社予算から支出（借金許可でマイナスになる場合あり）
+//  ・残った予算は各経営者の積立比率に応じて分配
+//  ・赤字（予算マイナス）の場合は積立比率に応じて負担
+//  ・退職済み経営者は分配対象外
 // ============================================================
 exports.dissolveCompany = onCall(CALL_OPTS, async (request) => {
   const uid         = requireAuth(request);
   const { companyId } = request.data;
   const c = await dbGet(`companies/${companyId}`);
   if (!c) throw new HttpsError("not-found","会社が見つかりません");
-  if (c.ownerId !== uid) throw new HttpsError("permission-denied","解散できるのは創業者のみです");
+  if (c.ownerId !== uid)
+    throw new HttpsError("permission-denied","解散できるのは創業者のみです");
 
-  const founder = await dbGet(`players/${uid}`);
-  if (!founder) throw new HttpsError("not-found","創業者データが見つかりません");
-
-  // 現在の株価・流通していない株数
-  const price       = c.price || 1;
   const shareholders = c.shareholders || {};
-  let totalRefund   = 0;
+  let   totalRefund  = 0;
 
-  // 株主への補填処理（購入時コストの推定として現在の流通株数×株価を使用）
-  // より正確には各プレイヤーのholdingsから購入コストを逆算
+  // 1. 株主への補填（購入コストを予算から支出）
   for (const [shUid, qty] of Object.entries(shareholders)) {
     if (qty <= 0) continue;
     const sp = await dbGet(`players/${shUid}`);
     if (!sp) continue;
-    // 購入時のコストを推定（investedCostから按分）
     const totalHeld = Object.values(sp.holdings||{}).reduce((a,b)=>a+b, 0);
-    const avgCost   = totalHeld > 0 ? (sp.investedCost||0)/totalHeld : price;
+    const avgCost   = totalHeld > 0 ? (sp.investedCost||0)/totalHeld : (c.price||1);
     const refund    = r(avgCost * qty);
     totalRefund    += refund;
-    // 株主: 株を$0で売却（holdings更新）+ 補填を受け取る
     const holdings  = {...(sp.holdings||{})};
     delete holdings[`co_${companyId}`];
     await dbPatch(`players/${shUid}`, {
@@ -989,15 +1063,32 @@ exports.dissolveCompany = onCall(CALL_OPTS, async (request) => {
     });
   }
 
-  // 起業者: 補填額を負担（解散ペナルティ）
-  const founderCoins = Math.max(0, r((founder.coins||0) - totalRefund));
-  const founderHoldings = {...(founder.holdings||{})};
-  delete founderHoldings[`co_${companyId}`];
-  await dbPatch(`players/${uid}`, {
-    coins:    founderCoins,
-    holdings: founderHoldings,
-  });
+  // 2. 残予算 = 現在の予算 - 株主補填額（借金許可でマイナスOK）
+  const remainBudget = r((c.totalBudget||0) - totalRefund);
+
+  // 3. 各経営者の積立額を集計（退職者除く）
+  const budget       = c.budget || {};
+  const activeOwners = Object.entries(budget).filter(([,b]) => !b.resigned);
+  const totalDeposited = activeOwners.reduce((s,[,b])=>s+(b.deposited||0), 0);
+
+  // 4. 残予算を積立比率で分配（赤字の場合は逆比率で負担）
+  for (const [ownerUid, budgetData] of activeOwners) {
+    const deposited = budgetData.deposited || 0;
+    const ratio     = totalDeposited > 0 ? deposited / totalDeposited : 1 / activeOwners.length;
+    const share     = r(remainBudget * ratio);
+    const op        = await dbGet(`players/${ownerUid}`);
+    if (!op) continue;
+    await dbPatch(`players/${ownerUid}`, {
+      coins:           r((op.coins||0) + share),
+      // ★ companyInvestedをリセット（この会社への出資分のみ差し引く）
+      companyInvested: Math.max(0, r((op.companyInvested||0) - deposited)),
+    });
+    await pushMeta(ownerUid, {...op,
+      coins:           r((op.coins||0) + share),
+      companyInvested: Math.max(0, r((op.companyInvested||0) - deposited)),
+    });
+  }
 
   await db.ref(`companies/${companyId}`).remove();
-  return { totalRefund, founderLoss: totalRefund };
+  return { totalRefund, remainBudget };
 });
