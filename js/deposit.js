@@ -1,5 +1,5 @@
 // ============================================================
-//  js/deposit.js  預金・定期預金操作（Cloud Functions版）
+//  js/deposit.js  預金・定期預金操作（翌日反映版）
 // ============================================================
 import { callFn, toast, fmt, r } from './firebase.js';
 import { withSubmit } from './ui.js';
@@ -22,12 +22,22 @@ export async function addDeposit() {
   });
 }
 
-export async function withdrawDeposit() {
+export async function requestWithdrawDeposit() {
   await withSubmit(async () => {
     const data = await callFn('deposit', { action:'withdraw' });
-    toast(`${fmt(data.returned)} COINを引き出しました`);
+    toast(`引き出しリクエストを受け付けました。翌日0時に ${fmt(data.scheduled ? '利息込みの残高' : '')} が引き出されます`);
   });
 }
+
+export async function cancelWithdrawDeposit() {
+  await withSubmit(async () => {
+    await callFn('deposit', { action:'cancel_withdraw' });
+    toast('引き出しリクエストをキャンセルしました');
+  });
+}
+
+// 後方互換エイリアス
+export const withdrawDeposit = requestWithdrawDeposit;
 
 export async function doTermDeposit() {
   await withSubmit(async () => {
@@ -40,11 +50,23 @@ export async function doTermDeposit() {
   });
 }
 
-export async function withdrawTermDeposit() {
+export async function requestWithdrawTermDeposit() {
   await withSubmit(async () => {
     const data = await callFn('deposit', { action:'term_withdraw' });
-    toast(data.matured
-      ? `定期満期！ ${fmt(data.returned)} COIN返還`
-      : `期限前解約。元本 ${fmt(data.returned)} COIN返還`);
+    toast(data.scheduled
+      ? `引き出しリクエストを受け付けました。翌日0時に処理されます`
+      : data.matured
+        ? `定期満期！翌日0時に ${fmt(data.returned)} COIN が返還されます`
+        : `期限前解約リクエストを受け付けました。翌日0時に元本 ${fmt(data.returned)} COIN が返還されます`);
   });
 }
+
+export async function cancelWithdrawTermDeposit() {
+  await withSubmit(async () => {
+    await callFn('deposit', { action:'cancel_term_withdraw' });
+    toast('引き出しリクエストをキャンセルしました');
+  });
+}
+
+// 後方互換エイリアス
+export const withdrawTermDeposit = requestWithdrawTermDeposit;
