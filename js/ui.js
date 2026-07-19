@@ -9,13 +9,14 @@ import { buildInvest }   from './invest.js';
 import { buildRanking }  from './ranking.js';
 import { buildCompany }  from './company.js';
 import { buildRules }    from './rules.js';
+import { buildMarket }   from './market.js';
 
 // ---- アプリ状態 ----
 export const S = {
   tab: 'home', uid: null, pname: '',
   lmode: 'login', lerr: '',
   players: {}, playersMeta: {}, roulette: null, stocks: {},
-  companies: {},
+  companies: {}, market: {},
   rbets: {}, now: Date.now(), submitting: false,
 };
 
@@ -40,6 +41,7 @@ function buildShell(p) {
     {id:'roulette', icon:'🎰', label:'ルーレット'},
     {id:'invest',   icon:'📈', label:'投資'},
     {id:'company',  icon:'🏢', label:'会社'},
+    {id:'market',   icon:'🏪', label:'販売所'},
     {id:'ranking',  icon:'🏆', label:'ランキング'},
     {id:'rules',    icon:'📖', label:'ルール'},
   ];
@@ -72,6 +74,7 @@ export function renderPanel(p) {
   if (S.tab==='roulette') html = buildRoulette(p, S);
   if (S.tab==='invest')   html = buildInvest(p, S);
   if (S.tab==='company')  html = buildCompany(p, S);
+  if (S.tab==='market')   html = buildMarket(p, S);
   if (S.tab==='ranking')  html = buildRanking(S);
   if (S.tab==='rules')    html = buildRules();
   panel.innerHTML = html;
