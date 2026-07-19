@@ -224,6 +224,9 @@ import { foundCompany, inviteCoOwner,
          buyCompanyStock, sellCompanyStock,
          dissolveCompany, depositToBudget,
          resignFromCompany }                        from './js/company.js';
+import { produce, setProductName,
+         listProduct, delistProduct,
+         buyProduct }                               from './js/market.js';
 import { onValue, ref, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -242,6 +245,18 @@ function subscribeCompanies() {
   if (companyUnsub) { try { off(cRef); } catch(_){} }
   companyUnsub = onValue(cRef, snap => {
     S.companies = snap.val() || {};
+    if (!S.submitting) scheduleRender();
+  });
+}
+
+// ---- 販売所データの購読 ----
+let marketUnsub = null;
+function subscribeMarket() {
+  const db2  = getDatabase();
+  const mRef = ref(db2, 'market');
+  if (marketUnsub) { try { off(mRef); } catch(_){} }
+  marketUnsub = onValue(mRef, snap => {
+    S.market = snap.val() || {};
     if (!S.submitting) scheduleRender();
   });
 }
@@ -300,6 +315,11 @@ window.W = {
   buyCompanyStock, sellCompanyStock,
   dissolveCompany, depositToBudget,
   resignFromCompany,
+
+  // 生産・販売所
+  produce, setProductName,
+  listProduct, delistProduct,
+  buyProduct,
 };
 
 window._toast = toast;
@@ -318,7 +338,8 @@ async function main() {
         onRoulette: v => { S.roulette=v;              if(!S.submitting) scheduleRender(); },
         onStocks:   v => { S.stocks=v||{};            if(!S.submitting) scheduleRender(); },
       });
-      subscribeCompanies(); // 会社データの購読
+      subscribeCompanies();
+      subscribeMarket();
       S.tab='home';
       scheduleRender();
     },
