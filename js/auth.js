@@ -128,7 +128,12 @@ export async function logout() {
 }
 
 // ---- 認証状態の監視 ----
+let _pendingOnLogin  = null;
+let _pendingOnLogout = null;
+
 export function initAuth(onLogin, onLogout) {
+  _pendingOnLogin  = onLogin;
+  _pendingOnLogout = onLogout;
   onAuthStateChanged(auth, async user => {
     if (user) {
       S.uid = user.uid; S.submitting = false;
@@ -139,6 +144,11 @@ export function initAuth(onLogin, onLogout) {
         if (!p.trait) {
           try { await callFn('ensureTrait', {}); } catch(_) {}
         }
+        // 本名未登録の既存ユーザーには本名入力モーダルを表示
+        if (!p.realName) {
+          showRealNameModal();
+          return; // モーダル送信後に _pendingOnLogin が呼ばれる
+        }
       }
       onLogin(user);
     } else {
@@ -146,6 +156,62 @@ export function initAuth(onLogin, onLogout) {
       onLogout();
     }
   });
+}
+
+// ---- 本名入力モーダル（既存ユーザー用） ----
+let _onLoginCallback = null;
+export function showRealNameModal() {
+  const existing = document.getElementById('realname-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'realname-modal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:700;
+    display:flex;align-items:center;justify-content:center;padding:20px`;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px;
+                max-width:360px;width:100%">
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">
+        ⚠ 本名の登録が必要です
+      </div>
+      <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:16px">
+        このプラットフォームは限られたメンバーのみが参加しています。<br>
+        不正行為（複数アカウント・なりすまし）を防ぐため、<strong>必ず本名を入力してください。</strong><br>
+        入力された本名は運営者のみが確認できます。
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:#555;
+                      display:block;margin-bottom:6px">本名（フルネーム）</label>
+        <input id="modal-realname" class="input" type="text"
+               placeholder="例: 山田 太郎" style="width:100%"
+               onkeydown="if(event.key==='Enter')W._submitRealName()"/>
+      </div>
+      <div id="modal-realname-err" style="color:#c0392b;font-size:12px;
+           margin-bottom:8px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%;padding:10px"
+              onclick="W._submitRealName()">登録して続ける</button>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('modal-realname')?.focus(), 100);
+}
+
+export async function submitRealName() {
+  const realName = document.getElementById('modal-realname')?.value.trim();
+  const errEl    = document.getElementById('modal-realname-err');
+  if (!realName) {
+    if (errEl) { errEl.textContent = '本名を入力してください'; errEl.style.display='block'; }
+    return;
+  }
+  try {
+    await callFn('updateRealName', { realName });
+    document.getElementById('realname-modal')?.remove();
+    // 保存しておいたコールバックを実行してゲーム画面へ遷移
+    if (_pendingOnLogin) {
+      const user = auth.currentUser;
+      if (user) await _pendingOnLogin(user);
+    }
+  } catch(e) {
+    if (errEl) { errEl.textContent = 'エラー: ' + e.message; errEl.style.display='block'; }
+  }
 }
 
 // ---- 特性情報 ----
