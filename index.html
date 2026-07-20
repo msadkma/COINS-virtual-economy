@@ -210,7 +210,8 @@ import { S, scheduleRender, doRender, renderPanel,
          withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
 import { renderLogin, login, logout,
          initAuth, changeTrait,
-         showTraitModal, TRAIT_INFO }              from './js/auth.js';
+         showTraitModal, TRAIT_INFO,
+         submitRealName, showRealNameModal }         from './js/auth.js';
 import { useTicket }                               from './js/tickets.js';
 import { doDeposit, addDeposit, withdrawDeposit,
          doTermDeposit, withdrawTermDeposit,
@@ -288,6 +289,8 @@ window.W = {
 
   // 認証
   login, logout,
+  // 既存ユーザーの本名登録
+  _submitRealName() { submitRealName(); },
 
   // チケット
   useTicket,
