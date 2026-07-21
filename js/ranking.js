@@ -17,11 +17,13 @@ export function buildRanking(S) {
   const avg     = avgAsset(S.playersMeta);
   const first   = rows[0]?.rt || 0; // 1位の資産
 
-  // 1位補正ボーナス計算
-  // 計算式: floor( ((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産 )
+  // 1位補正ボーナス計算（修正版）
+  // 計算式: floor(((1位資産/(自分資産+1) - 1) / 100 + 1) * 自分資産) - 自分資産
+  // つまり「計算後の値から自分の現在資産を引いた差分」が毎日の補正額
   function calcFirstBonus(myRt) {
     if (first <= 0 || myRt >= first) return 0;
-    return Math.floor(((first / (myRt + 1) - 1) / 100 + 1) * myRt);
+    const base = Math.floor(((first / (myRt + 1) - 1) / 100 + 1) * myRt);
+    return Math.max(0, base - myRt);
   }
 
   let html = `
