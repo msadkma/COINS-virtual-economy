@@ -225,9 +225,9 @@ import { foundCompany, inviteCoOwner,
          buyCompanyStock, sellCompanyStock,
          dissolveCompany, depositToBudget,
          resignFromCompany }                        from './js/company.js';
-import { produce, setProductName,
-         listProduct, delistProduct,
-         buyProduct }                               from './js/market.js';
+import { produce, listProduct, delistProduct, buyProduct,
+         useTermTicket, useRouletteTip,
+         useTradeViewer, useTraitTicket }            from './js/market.js';
 import { onValue, ref, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -320,9 +320,9 @@ window.W = {
   resignFromCompany,
 
   // 生産・販売所
-  produce, setProductName,
-  listProduct, delistProduct,
-  buyProduct,
+  produce, listProduct, delistProduct, buyProduct,
+  // アイテム使用
+  useTermTicket, useRouletteTip, useTradeViewer, useTraitTicket,
 };
 
 window._toast = toast;
