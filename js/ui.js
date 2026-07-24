@@ -6,13 +6,13 @@ import { fmt, esc, r, calcInterest, calcInterestWithTrait, rankTotal, calcBetLim
          totalAssetsAll, isRed, WHEEL_ORDER } from './firebase.js';
 import { buildRoulette } from './roulette.js';
 import { buildInvest }   from './invest.js';
-import { buildRanking }  from './ranking.js';
+import { buildRanking, loadMonthlyRanking } from './ranking.js';
 import { buildCompany }  from './company.js';
 import { buildRules }    from './rules.js';
 import { buildMarket }   from './market.js';
 
 // ---- アプリ状態 ----
-export const S = {
+export { loadMonthlyRanking };
   tab: 'home', uid: null, pname: '',
   lmode: 'login', lerr: '',
   players: {}, playersMeta: {}, roulette: null, stocks: {},
@@ -380,7 +380,7 @@ function buildDeposit(p) {
                 onclick="W.withdrawTermDeposit()">
           ${tdl>0
             ? `期限前解約リクエスト（元本 <span class="din">${fmt(r(p.termDeposit.principal))}</span> C・翌日反映）`
-            : `満期引き出しリクエスト（<span class="din">${fmt(tdepBal)}</span> C・翌日反映）`}
+            : `✅ 満期引き出し（<span class="din">${fmt(tdepBal)}</span> C・即時）`}
         </button>
       ` : `
         <button class="btn" onclick="W.cancelWithdrawTermDeposit()">
