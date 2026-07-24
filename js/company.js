@@ -156,7 +156,7 @@ export function buildCompany(p, S) {
 
         ${isOwner ? `
         <div style="margin-bottom:8px">
-          <label class="form-label">共同経営者を招待（UIDまたはプレイヤー名）</label>
+          <label class="form-label">共同経営者を招待（プレイヤー名）</label>
           <div class="row" style="gap:6px">
             <input class="input" id="inv-${c.id}" type="text"
                    placeholder="プレイヤー名" style="flex:1"/>
@@ -168,6 +168,23 @@ export function buildCompany(p, S) {
         ${pendingInvites.map(([uid,inv]) =>
           `<div class="hint">${esc(inv.name)} — 承認待ち</div>`
         ).join('')}` : ''}
+
+        <div style="margin-bottom:8px;padding:10px;background:#f9f8f6;border-radius:8px">
+          <label class="form-label">株の追加発行</label>
+          <div style="font-size:12px;color:#888;margin-bottom:6px;line-height:1.6">
+            追加発行コスト = 現在株価 × 追加株数（会社予算から引かれます）<br>
+            追加発行により株価が希薄化します
+          </div>
+          <div class="row" style="gap:6px">
+            <input class="input" id="issue-${c.id}" type="number" min="1"
+                   placeholder="追加株数" style="width:110px"/>
+            <button class="btn btn-sm btn-primary"
+                    onclick="W.issueMoreShares('${c.id}')">追加発行</button>
+            <span class="hint">
+              現在: <span class="din">${fmt(c.totalShares||0)}</span>株発行済み
+            </span>
+          </div>
+        </div>
         ` : ''}
 
         <div class="row" style="gap:6px;margin-top:6px">
@@ -343,6 +360,21 @@ export async function sellCompanyStock(companyId) {
     const c = S.companies?.[companyId];
     const data = await callFn("sellCompanyStock", { companyId, qty });
     toast(`${esc(c?.name||"")} ${qty}株を売却 (+${fmt(data.revenue)} COIN)`);
+  });
+}
+
+export async function issueMoreShares(companyId) {
+  await withSubmit(async () => {
+    const additionalShares = parseInt(
+      document.getElementById(`issue-${companyId}`)?.value
+    )||0;
+    if (additionalShares < 1) { toast('追加株数を入力してください'); return; }
+    const data = await callFn('issueMoreShares', { companyId, additionalShares });
+    toast(
+      `株を${fmt(additionalShares)}株追加発行しました。` +
+      `新株価: ${fmt(data.newPrice)} C / ` +
+      `コスト: ${fmt(data.issueCost)} C（会社予算から）`
+    );
   });
 }
 
