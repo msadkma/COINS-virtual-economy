@@ -2,17 +2,22 @@
 //  js/ranking.js  ランキング表示（月間ランキング対応版）
 // ============================================================
 import { fmt, r, esc, avgAsset, rankTotal, callFn } from './firebase.js';
-import { S } from './ui.js';
 
 // 月間ランキングのキャッシュ
 let monthlyCache = null;
 let monthlyLoading = false;
+let _onMonthlyLoaded = null; // ロード完了後のコールバック
+
+export function setMonthlyLoadedCallback(cb) {
+  _onMonthlyLoaded = cb;
+}
 
 export async function loadMonthlyRanking() {
   if (monthlyLoading) return;
   monthlyLoading = true;
   try {
     monthlyCache = await callFn('getMonthlyRanking', {});
+    if (_onMonthlyLoaded) _onMonthlyLoaded();
   } catch(e) {
     console.error('monthly ranking:', e.message);
   } finally {
@@ -127,10 +132,7 @@ export function buildRanking(S) {
 
     if (!monthlyCache) {
       // 未ロードの場合はロードをトリガーして読み込み中表示
-      loadMonthlyRanking().then(() => {
-        // ロード完了後に再描画
-        if (typeof scheduleRender === 'function') scheduleRender();
-      });
+      loadMonthlyRanking();
       html += `<div style="text-align:center;padding:30px;color:#888">
         📊 月間データを読み込み中...
       </div>`;
