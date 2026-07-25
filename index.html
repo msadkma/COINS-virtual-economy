@@ -207,8 +207,8 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
 <script type="module">
 import { auth, dbGet, subscribeAll, toast, callFn } from './js/firebase.js';
 import { S, scheduleRender, doRender, renderPanel,
-         withSubmit, updateMetricsOnly, resetMain,
-         loadMonthlyRanking } from './js/ui.js';
+         withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
+import { loadMonthlyRanking, setMonthlyLoadedCallback } from './js/ranking.js';
 import { renderLogin, login, logout,
          initAuth, changeTrait,
          showTraitModal, TRAIT_INFO,
@@ -346,6 +346,8 @@ async function main() {
       });
       subscribeCompanies();
       subscribeMarket();
+      // 月間ランキングロード完了後に再描画するコールバックを設定
+      setMonthlyLoadedCallback(() => scheduleRender());
       S.tab='home';
       scheduleRender();
     },
