@@ -39,6 +39,7 @@ const TRAITS      = ["worker","manager","negotiator","balancer","accountant"];
 //  ヘルパー
 // ============================================================
 const r    = n => Math.round(n);
+const fmt  = n => Math.round(n).toLocaleString("ja-JP");
 const isRed   = n => RED_NUMS.includes(n);
 const isBlack = n => !isRed(n) && n > 0;
 
@@ -354,15 +355,24 @@ exports.deposit = onCall(CALL_OPTS, async (request) => {
     const ret     = matured
       ? r(p.termDeposit.principal * Math.pow(tdRate, elapsed))
       : r(p.termDeposit.principal);
-    // 翌日反映制度
-    const todayMidTd = new Date(now); todayMidTd.setHours(0,0,0,0);
-    const tomorrowMidTd = todayMidTd.getTime() + 86400000;
-    await dbPatch(`players/${uid}`, {
-      "termDeposit/pendingWithdrawal":   true,
-      "termDeposit/withdrawalScheduled": tomorrowMidTd,
-      "termDeposit/withdrawalAmount":    ret,
-    });
-    return { scheduled: tomorrowMidTd, returned: ret, matured };
+
+    if (matured) {
+      // 満期の場合は即時返還
+      const upd = { coins: coins+ret, termDeposit: null, termDepositBalance: 0 };
+      await dbPatch(`players/${uid}`, upd);
+      await pushMeta(uid, {...p, ...upd});
+      return { returned: ret, matured: true, immediate: true };
+    } else {
+      // 期限前解約は翌日反映
+      const todayMidTd    = new Date(now); todayMidTd.setHours(0,0,0,0);
+      const tomorrowMidTd = todayMidTd.getTime() + 86400000;
+      await dbPatch(`players/${uid}`, {
+        "termDeposit/pendingWithdrawal":   true,
+        "termDeposit/withdrawalScheduled": tomorrowMidTd,
+        "termDeposit/withdrawalAmount":    ret,
+      });
+      return { scheduled: tomorrowMidTd, returned: ret, matured: false };
+    }
   }
 
   if (action === "cancel_term_withdraw") {
@@ -820,7 +830,10 @@ exports.foundCompany = onCall(CALL_OPTS, async (request) => {
   const cost = r(price * shares);
   const p    = await dbGet(`players/${uid}`);
   if (!p) throw new HttpsError("not-found","Player not found");
-  // 借金許可: 残高が足りなくても起業可能（借金はcoinsがマイナスになることで表現）
+  // 起業時は借金禁止（残高不足なら弾く）
+  if (cost > r(p.coins||0))
+    throw new HttpsError("failed-precondition",
+      `起業には ${fmt(cost)} COINが必要です（現在: ${fmt(r(p.coins||0))} COIN）`);
   const now  = Date.now();
   const id   = `co_${now}_${Math.random().toString(36).slice(2,7)}`;
   const comp = {
@@ -1091,4 +1104,428 @@ exports.dissolveCompany = onCall(CALL_OPTS, async (request) => {
 
   await db.ref(`companies/${companyId}`).remove();
   return { totalRefund, remainBudget };
+});
+
+// ============================================================
+//  生産システム
+//  ・経営者が手動で生産トリガーを押す
+//  ・通常: 60分/回、全特性揃い会社: 15分/回
+//  ・生産コストは会社予算から引かれる
+//  ・生産量 = 経営者の人数（退職者除く）
+// ============================================================
+
+// ============================================================
+//  生産アイテム定義
+// ============================================================
+const PRODUCT_TYPES = {
+  term_ticket:  { name:"定期預金即引出チケット",    cost:100,   desc:"利息込みで定期預金を即時引き出せる（1枚1回限り）" },
+  roulette_tip: { name:"ルーレット当選番号速報",    cost:20000, desc:"10%の確率で次回ルーレットの当選番号が事前にわかる" },
+  trade_viewer: { name:"株売買履歴閲覧装置",        cost:100,   desc:"全プレイヤーの株売買履歴を24時間閲覧できる" },
+  trait_ticket: { name:"特性変更チケット",          cost:100,   desc:"指定した特性に24時間変更できる" },
+};
+const TRAIT_LABELS = { worker:"仕事人", manager:"経営者", negotiator:"交渉者", balancer:"バランサー", accountant:"会計士" };
+
+// 生産
+exports.produce = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const { companyId, productType, traitTarget } = request.data;
+
+  if (!PRODUCT_TYPES[productType])
+    throw new HttpsError("invalid-argument","無効な商品種類です");
+  if (productType === "trait_ticket" && !TRAITS.includes(traitTarget))
+    throw new HttpsError("invalid-argument","有効な特性を指定してください");
+
+  const c = await dbGet(`companies/${companyId}`);
+  if (!c) throw new HttpsError("not-found","会社が見つかりません");
+  if (!Object.keys(c.owners||{}).includes(uid))
+    throw new HttpsError("permission-denied","経営者ではありません");
+
+  const now        = Date.now();
+  const meta       = await dbGet("playersMeta") || {};
+  const allTraits  = hasAllTraits(c.owners, meta);
+  const intervalMs = allTraits ? 90*60*1000 : 120*60*1000;
+  if (now - (c.lastProducedAt||0) < intervalMs) {
+    const remaining = Math.ceil((intervalMs - (now-(c.lastProducedAt||0)))/60000);
+    throw new HttpsError("failed-precondition",`次の生産まで ${remaining} 分かかります`);
+  }
+
+  const activeOwners = Object.entries(c.budget||{}).filter(([,b])=>!b.resigned);
+  const qty          = Math.max(1, activeOwners.length);
+  const unitCost     = PRODUCT_TYPES[productType].cost;
+  const totalCost    = qty * unitCost;
+  const newBudget    = r((c.totalBudget||0) - totalCost);
+
+  // 在庫キー: trait_ticketは対象特性ごとに分ける
+  const stockKey   = productType === "trait_ticket" ? `trait_ticket_${traitTarget}` : productType;
+  const currentQty = (await dbGet(`companies/${companyId}/stock/${stockKey}`)) || 0;
+  await dbSet(`companies/${companyId}/stock/${stockKey}`, currentQty + qty);
+  await dbPatch(`companies/${companyId}`, { totalBudget: newBudget, lastProducedAt: now });
+
+  // ルーレット速報: 事前に当たるか決定してDBに保存
+  if (productType === "roulette_tip") {
+    const isHit     = Math.random() < 0.10;
+    const winNumber = isHit ? WHEEL_ORDER[Math.floor(Math.random()*38)] : null;
+    await dbSet(`companies/${companyId}/rouletteTipResult`, { isHit, winNumber, generatedAt: now });
+  }
+
+  const displayName = productType === "trait_ticket"
+    ? `特性変更チケット（${TRAIT_LABELS[traitTarget]}）` : PRODUCT_TYPES[productType].name;
+  return { qty, totalCost, newStock: currentQty + qty, productName: displayName, allTraits };
+});
+
+// ============================================================
+//  販売所システム
+//  ・生産した商品を市場に出品
+//  ・他のプレイヤーが購入可能
+//  ・売上は会社予算に入る
+// ============================================================
+
+exports.listProduct = onCall(CALL_OPTS, async (request) => {
+  const uid                                        = requireAuth(request);
+  const { companyId, stockKey, qty, pricePerUnit } = request.data;
+  if (!stockKey)          throw new HttpsError("invalid-argument","商品種類を指定してください");
+  if (!qty || qty <= 0)   throw new HttpsError("invalid-argument","数量が不正です");
+  if (!pricePerUnit || pricePerUnit <= 0)
+    throw new HttpsError("invalid-argument","価格が不正です");
+
+  const c = await dbGet(`companies/${companyId}`);
+  if (!c) throw new HttpsError("not-found","会社が見つかりません");
+  if (!Object.keys(c.owners||{}).includes(uid))
+    throw new HttpsError("permission-denied","経営者ではありません");
+
+  const currentStock = (await dbGet(`companies/${companyId}/stock/${stockKey}`)) || 0;
+  if (currentStock < qty)
+    throw new HttpsError("failed-precondition",
+      `在庫が不足しています（在庫: ${currentStock}個）`);
+
+  const now       = Date.now();
+  const listingId = `lst_${now}_${Math.random().toString(36).slice(2,6)}`;
+  const displayName = (() => {
+    if (stockKey==="term_ticket")  return "定期預金即引出チケット";
+    if (stockKey==="roulette_tip") return "ルーレット当選番号速報";
+    if (stockKey==="trade_viewer") return "株売買履歴閲覧装置";
+    const m = stockKey.match(/^trait_ticket_(.+)$/);
+    const tl = { worker:"仕事人", manager:"経営者", negotiator:"交渉者",
+                 balancer:"バランサー", accountant:"会計士" };
+    if (m) return `特性変更チケット（${tl[m[1]]||m[1]}）`;
+    return stockKey;
+  })();
+  const listing = {
+    id: listingId, companyId,
+    companyName: c.name,
+    stockKey,
+    productName: displayName,
+    qty, pricePerUnit,
+    createdAt:  now,
+    sellerId:   uid,
+  };
+
+  await dbSet(`companies/${companyId}/stock/${stockKey}`, currentStock - qty);
+  await dbSet(`market/${listingId}`, listing);
+  await dbSet(`companies/${companyId}/listings/${listingId}`, {
+    qty, pricePerUnit, listingId, stockKey, createdAt: now,
+  });
+  return { listingId };
+});
+
+exports.delistProduct = onCall(CALL_OPTS, async (request) => {
+  const uid           = requireAuth(request);
+  const { listingId } = request.data;
+  const listing = await dbGet(`market/${listingId}`);
+  if (!listing) throw new HttpsError("not-found","出品が見つかりません");
+  const c = await dbGet(`companies/${listing.companyId}`);
+  if (!c) throw new HttpsError("not-found","会社が見つかりません");
+  if (!Object.keys(c.owners||{}).includes(uid))
+    throw new HttpsError("permission-denied","経営者ではありません");
+  // 在庫に戻す（stockKey対応）
+  const key = listing.stockKey || "term_ticket";
+  const cur = (await dbGet(`companies/${listing.companyId}/stock/${key}`)) || 0;
+  await dbSet(`companies/${listing.companyId}/stock/${key}`, cur + listing.qty);
+  await db.ref(`market/${listingId}`).remove();
+  await db.ref(`companies/${listing.companyId}/listings/${listingId}`).remove();
+  return { ok:true };
+});
+
+exports.buyProduct = onCall(CALL_OPTS, async (request) => {
+  const uid                = requireAuth(request);
+  const { listingId, qty } = request.data;
+  if (!qty || qty <= 0) throw new HttpsError("invalid-argument","数量が不正です");
+
+  const listing = await dbGet(`market/${listingId}`);
+  if (!listing) throw new HttpsError("not-found","出品が見つかりません");
+  if (listing.qty < qty)
+    throw new HttpsError("failed-precondition",
+      `数量が不足しています（残り: ${listing.qty}個）`);
+
+  const p = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+  const totalCost = r(listing.pricePerUnit * qty);
+  if (totalCost > r(p.coins||0))
+    throw new HttpsError("failed-precondition","COINが不足しています");
+
+  // 購入者の残高を減らす
+  await dbPatch(`players/${uid}`, { coins: r((p.coins||0) - totalCost) });
+  await pushMeta(uid, {...p, coins: r((p.coins||0) - totalCost)});
+
+  // 購入者のアイテムにstockKeyで保存
+  const itemKey    = listing.stockKey || "term_ticket";
+  const curItems   = (await dbGet(`players/${uid}/items/${itemKey}`)) || 0;
+  await dbSet(`players/${uid}/items/${itemKey}`, curItems + qty);
+
+  // 売上を会社予算に追加
+  const c = await dbGet(`companies/${listing.companyId}`);
+  if (c) {
+    await dbPatch(`companies/${listing.companyId}`, {
+      totalBudget: r((c.totalBudget||0) + totalCost),
+    });
+  }
+
+  // 出品数を更新
+  const newQty = listing.qty - qty;
+  if (newQty <= 0) {
+    await db.ref(`market/${listingId}`).remove();
+    await db.ref(`companies/${listing.companyId}/listings/${listingId}`).remove();
+  } else {
+    await dbPatch(`market/${listingId}`, { qty: newQty });
+    await dbPatch(`companies/${listing.companyId}/listings/${listingId}`, { qty: newQty });
+  }
+
+  return { totalCost, remaining: newQty };
+});
+
+// ============================================================
+//  既存ユーザーへの本名登録
+// ============================================================
+exports.updateRealName = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const { realName } = request.data;
+  if (!realName?.trim()) throw new HttpsError("invalid-argument","本名を入力してください");
+  await dbPatch(`players/${uid}`, { realName: realName.trim() });
+  return { ok:true };
+});
+
+// ============================================================
+//  アイテム使用
+// ============================================================
+
+// ① 定期預金即引出チケット（利息込み即時引き出し）
+exports.useTermTicket = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const p   = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+
+  const itemCount = (await dbGet(`players/${uid}/items/term_ticket`)) || 0;
+  if (itemCount < 1)
+    throw new HttpsError("failed-precondition","定期預金即引出チケットがありません");
+  if (!p.termDeposit?.principal)
+    throw new HttpsError("failed-precondition","定期預金がありません");
+
+  const now     = Date.now();
+  const tdRate  = termDepositRate(p);
+  const elapsed = (now - p.termDeposit.since) / 86400000;
+  // チケット使用時は利息込みで全額返還
+  const ret     = r(p.termDeposit.principal * Math.pow(tdRate, elapsed));
+
+  await dbPatch(`players/${uid}`, {
+    coins:              r((p.coins||0) + ret),
+    termDeposit:        null,
+    termDepositBalance: 0,
+  });
+  // チケットを1枚消費
+  await dbSet(`players/${uid}/items/term_ticket`, itemCount - 1);
+  await pushMeta(uid, {...p, coins: r((p.coins||0)+ret), termDeposit: null});
+  return { returned: ret, interest: r(ret - p.termDeposit.principal) };
+});
+
+// ② ルーレット当選番号速報（事前に決定済みの結果を取得）
+exports.useRouletteTip = onCall(CALL_OPTS, async (request) => {
+  const uid             = requireAuth(request);
+  const { companyId }   = request.data; // 購入元会社のID
+  const p = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+
+  const itemCount = (await dbGet(`players/${uid}/items/roulette_tip`)) || 0;
+  if (itemCount < 1)
+    throw new HttpsError("failed-precondition","ルーレット当選番号速報がありません");
+
+  // 購入元会社の事前決定結果を取得
+  const tipResult = await dbGet(`companies/${companyId}/rouletteTipResult`);
+  if (!tipResult)
+    throw new HttpsError("not-found","速報データが見つかりません");
+
+  // チケットを1枚消費
+  await dbSet(`players/${uid}/items/roulette_tip`, itemCount - 1);
+
+  if (!tipResult.isHit) {
+    return { hit: false, message: "今回は外れです（次回ルーレットは当選番号情報なし）" };
+  }
+  return { hit: true, winNumber: tipResult.winNumber,
+           message: `次回ルーレットの当選番号は ${tipResult.winNumber} です！` };
+});
+
+// ③ 株売買履歴閲覧装置（24時間有効フラグを付与）
+exports.useTradeViewer = onCall(CALL_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const p   = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+
+  const itemCount = (await dbGet(`players/${uid}/items/trade_viewer`)) || 0;
+  if (itemCount < 1)
+    throw new HttpsError("failed-precondition","株売買履歴閲覧装置がありません");
+
+  const now     = Date.now();
+  const expires = now + 24*60*60*1000;
+  await dbPatch(`players/${uid}`, { tradeViewerExpires: expires });
+  await dbSet(`players/${uid}/items/trade_viewer`, itemCount - 1);
+  return { expires, message: "株売買履歴を24時間閲覧できます" };
+});
+
+// ④ 特性変更チケット（24時間の一時特性変更）
+exports.useTraitTicket = onCall(CALL_OPTS, async (request) => {
+  const uid           = requireAuth(request);
+  const { traitTarget } = request.data;
+  if (!TRAITS.includes(traitTarget))
+    throw new HttpsError("invalid-argument","無効な特性です");
+
+  const p = await dbGet(`players/${uid}`);
+  if (!p) throw new HttpsError("not-found","Player not found");
+
+  const ticketKey = `trait_ticket_${traitTarget}`;
+  const itemCount = (await dbGet(`players/${uid}/items/${ticketKey}`)) || 0;
+  if (itemCount < 1)
+    throw new HttpsError("failed-precondition",`${traitTarget}の特性変更チケットがありません`);
+
+  const now     = Date.now();
+  const expires = now + 24*60*60*1000;
+
+  // 元の特性を保存して一時変更
+  await dbPatch(`players/${uid}`, {
+    originalTrait:       p.trait || null,
+    trait:               traitTarget,
+    traitTicketExpires:  expires,
+  });
+  await dbSet(`players/${uid}/items/${ticketKey}`, itemCount - 1);
+  await pushMeta(uid, {...p, trait: traitTarget});
+
+  const tl = { worker:"仕事人", manager:"経営者", negotiator:"交渉者",
+               balancer:"バランサー", accountant:"会計士" };
+  return { newTrait: traitTarget, expires,
+           message: `特性を「${tl[traitTarget]}」に24時間変更しました` };
+});
+
+// ============================================================
+//  特性チケットの期限切れ処理（毎分チェック）
+// ============================================================
+exports.scheduledTraitExpiry = onSchedule("* * * * *", async () => {
+  const now     = Date.now();
+  const players = await dbGet("players") || {};
+  for (const [uid, p] of Object.entries(players)) {
+    if (!p.traitTicketExpires) continue;
+    if (now < p.traitTicketExpires) continue;
+    // 期限切れ → 元の特性に戻す
+    const restored = p.originalTrait || "worker";
+    await dbPatch(`players/${uid}`, {
+      trait:              restored,
+      originalTrait:      null,
+      traitTicketExpires: null,
+    });
+    await pushMeta(uid, {...p, trait: restored, originalTrait: null});
+  }
+});
+
+// ============================================================
+//  株の追加発行（起業者のみ）
+//  ・追加株数分のコストを会社予算から引く
+//  ・追加発行により流通株数と総発行株数が増える
+//  ・株価は予算/流通株数で計算されるため、追加発行で株価が希薄化する
+// ============================================================
+exports.issueMoreShares = onCall(CALL_OPTS, async (request) => {
+  const uid           = requireAuth(request);
+  const { companyId, additionalShares } = request.data;
+
+  if (!additionalShares || additionalShares < 1)
+    throw new HttpsError("invalid-argument","追加発行株数は1以上を指定してください");
+
+  const c = await dbGet(`companies/${companyId}`);
+  if (!c) throw new HttpsError("not-found","会社が見つかりません");
+  if (c.ownerId !== uid)
+    throw new HttpsError("permission-denied","株の追加発行は起業者のみ可能です");
+
+  const newTotalShares       = (c.totalShares||0) + additionalShares;
+  const newCirculatingShares = (c.circulatingShares||0) + additionalShares;
+
+  // 追加発行コスト = 現在の株価 × 追加株数（会社予算から引く）
+  const issueCost  = r((c.price||1) * additionalShares);
+  const newBudget  = r((c.totalBudget||0) - issueCost);
+
+  // 新しい株価 = 予算 / 新流通株数
+  const newPrice   = Math.max(1, r(newBudget / Math.max(1, newCirculatingShares)));
+  const history    = [...(c.history||[c.price||1]), newPrice].slice(-60);
+
+  await dbPatch(`companies/${companyId}`, {
+    totalShares:       newTotalShares,
+    circulatingShares: newCirculatingShares,
+    totalBudget:       newBudget,
+    price:             newPrice,
+    history,
+  });
+
+  return {
+    newTotalShares,
+    newCirculatingShares,
+    newPrice,
+    issueCost,
+  };
+});
+
+// ============================================================
+//  月間ランキング用スナップショット（毎月1日0時に保存）
+//  日本時間（UTC+9）の月初を基準にする
+// ============================================================
+exports.scheduledMonthlySnapshot = onSchedule("0 15 1 * *", async () => {
+  // 毎月1日 UTC15:00 = 日本時間 0:00
+  const players = await dbGet("players") || {};
+  const now     = Date.now();
+  // 月のキー: YYYY-MM形式（日本時間基準）
+  const jstDate = new Date(now + 9*60*60*1000);
+  const monthKey = `${jstDate.getUTCFullYear()}-${String(jstDate.getUTCMonth()+1).padStart(2,'0')}`;
+
+  const snapshot = {};
+  for (const [uid, p] of Object.entries(players)) {
+    snapshot[uid] = {
+      name:      p.name || "",
+      rankTotal: rankTotal(p),
+      savedAt:   now,
+    };
+  }
+  await dbSet(`monthlySnapshots/${monthKey}`, snapshot);
+});
+
+// 月間スナップショットを手動で取得・作成するAPI
+exports.getMonthlyRanking = onCall(CALL_OPTS, async (request) => {
+  requireAuth(request);
+  const now     = Date.now();
+  const jstDate = new Date(now + 9*60*60*1000);
+  const monthKey = `${jstDate.getUTCFullYear()}-${String(jstDate.getUTCMonth()+1).padStart(2,'0')}`;
+
+  let snapshot = await dbGet(`monthlySnapshots/${monthKey}`);
+
+  // 今月のスナップショットがまだない場合は現時点のデータを一時的に使用
+  if (!snapshot) {
+    const players = await dbGet("players") || {};
+    snapshot = {};
+    for (const [uid, p] of Object.entries(players)) {
+      snapshot[uid] = { name: p.name||"", rankTotal: rankTotal(p), savedAt: now };
+    }
+  }
+
+  // 現在の資産と差分を計算
+  const meta    = await dbGet("playersMeta") || {};
+  const results = Object.entries(snapshot).map(([uid, snap]) => {
+    const current = meta[uid]?.rankTotal || snap.rankTotal;
+    const gain    = current - snap.rankTotal;
+    return { uid, name: snap.name, startRankTotal: snap.rankTotal, current, gain };
+  }).sort((a,b) => b.gain - a.gain);
+
+  return { monthKey, results };
 });
