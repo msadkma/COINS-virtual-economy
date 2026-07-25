@@ -53,11 +53,11 @@ export async function doTermDeposit() {
 export async function requestWithdrawTermDeposit() {
   await withSubmit(async () => {
     const data = await callFn('deposit', { action:'term_withdraw' });
-    toast(data.scheduled
-      ? `引き出しリクエストを受け付けました。翌日0時に処理されます`
-      : data.matured
-        ? `定期満期！翌日0時に ${fmt(data.returned)} COIN が返還されます`
-        : `期限前解約リクエストを受け付けました。翌日0時に元本 ${fmt(data.returned)} COIN が返還されます`);
+    if (data.immediate) {
+      toast(`✅ 満期！ ${fmt(data.returned)} COIN を受け取りました`);
+    } else {
+      toast(`引き出しリクエストを受け付けました。翌日0時に元本 ${fmt(data.returned)} COIN が返還されます`);
+    }
   });
 }
 
