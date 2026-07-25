@@ -207,7 +207,8 @@ body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;
 <script type="module">
 import { auth, dbGet, subscribeAll, toast, callFn } from './js/firebase.js';
 import { S, scheduleRender, doRender, renderPanel,
-         withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
+         withSubmit, updateMetricsOnly, resetMain,
+         loadMonthlyRanking } from './js/ui.js';
 import { renderLogin, login, logout,
          initAuth, changeTrait,
          showTraitModal, TRAIT_INFO,
@@ -278,6 +279,8 @@ async function periodicCheck() {
 window.W = {
   // 内部ヘルパー
   _setMode(m)  { S.lmode=m; S.lerr=''; renderLogin(); },
+  _setRankTab(tab) { S.rankTab = tab; scheduleRender(); },
+  _reloadMonthly() { loadMonthlyRanking().then(() => scheduleRender()); },
   _setTab(t)   { S.tab=t; scheduleRender(); },
   _toggleBet(type) { toggleBet(type); },
   _clearBets() { clearBets(); },
