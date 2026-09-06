@@ -48,13 +48,13 @@ export async function useTermTicket() {
   });
 }
 
-export async function useRouletteTip(companyId) {
+export async function useRouletteTip() {
   await withSubmit(async () => {
-    const data = await callFn('useRouletteTip', { companyId });
+    const data = await callFn('useRouletteTip', {});
     if (data.hit) {
       toast(`🎯 当たり！次回ルーレットの当選番号は【${data.winNumber}】です！`, 8000);
     } else {
-      toast('🎯 外れ... 今回は当選番号情報はありません', 5000);
+      toast('🎯 外れ... 今回は当選番号情報はありません（1枚消費）', 5000);
     }
   });
 }
@@ -313,23 +313,13 @@ export function buildMarket(p, S) {
               <span class="badge badge-blue din">${fmt(qty)}枚</span>
             </div>
             <div class="hint" style="margin-bottom:6px">
-              購入元会社を選択して速報を確認してください（10%で当たり）
+              使用するたびに10%の確率で次回ルーレットの当選番号がわかります。<br>
+              外れでも1枚消費されます。
             </div>
-            ${companiesWithTip.length > 0 ? `
-            <div class="row" style="gap:6px">
-              <select class="input" id="tip-company-sel" style="flex:1">
-                ${companiesWithTip.map(c =>
-                  `<option value="${c.id}">${esc(c.name)}</option>`
-                ).join('')}
-              </select>
-              <button class="btn btn-primary btn-sm"
-                      onclick="W.useRouletteTip(document.getElementById('tip-company-sel').value)">
-                🎯 速報を確認
-              </button>
-            </div>` : `
-            <button class="btn btn-sm" disabled>
-              購入元会社の速報データが見つかりません
-            </button>`}
+            <button class="btn btn-primary btn-sm"
+                    onclick="W.useRouletteTip()">
+              🎯 使用する（残り${fmt(qty)}枚）
+            </button>
           </div>`;
         }
 
