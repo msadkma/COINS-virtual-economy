@@ -83,6 +83,11 @@ export function renderPanel(p) {
 export function resetMain() { mainRendered = false; }
 
 export async function withSubmit(fn) {
+  // 二重送信防止: 既に送信中なら何もしない。
+  // これが無いと、ボタンの disabled 表示は再描画後にしか反映されない
+  // ため、連打やタイミングよく2回押すと produce 等のサーバー呼び出しが
+  // 複数同時に飛び、想定回数を超えて処理される（例: 生産の二重実行）。
+  if (S.submitting) return;
   S.submitting = true;
   try { await fn(); }
   catch(e) { window._toast?.('エラー: ' + e.message); console.error(e); }
