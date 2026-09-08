@@ -349,7 +349,7 @@ export function buildRules() {
     <div style="border:1px solid #e0ddd8;border-radius:8px;padding:12px;margin-bottom:10px">
       <div style="font-weight:700;font-size:13px;margin-bottom:6px">💰 会社予算の仕組み</div>
       <div style="font-size:12px;color:#555;line-height:1.9">
-        会社には「予算」があり、経営者は自由に入金できます。<br>
+        会社には「予算」があり、経営者は入金できます（<strong>一度に入金できるのは1億COINまで</strong>）。<br>
         <strong>損益はすべて会社予算で処理</strong>されます（個人COINには直接影響しません）。<br>
         解散時は各経営者の積立比率に応じて残予算を分配します。<br>
         赤字の場合は積立比率に応じて各経営者が負担します。
@@ -368,7 +368,7 @@ export function buildRules() {
     <div style="border:1px solid #e0ddd8;border-radius:8px;padding:12px;margin-bottom:10px">
       <div style="font-weight:700;font-size:13px;margin-bottom:6px">📊 株価の決まり方</div>
       <div style="font-size:12px;color:#555;line-height:1.9">
-        会社株価 = 会社予算 ÷ 流通株数 × 変動係数（12時間ごとに更新）<br>
+        会社株価 = 会社予算 ÷ 流通株数 ×（±2%のランダムなノイズ）（12時間ごとに更新）<br>
         予算が増えると株価が上がり、配当支払いや生産コストで予算が減ると下がります。
       </div>
     </div>
@@ -399,7 +399,8 @@ export function buildRules() {
         ・生産ボタンを押すたびに1回分生産される（手動操作）<br>
         ・生産間隔: <strong>通常 120分/回</strong>、全特性揃いの会社は <strong>90分/回</strong><br>
         ・生産量: <strong>アクティブな経営者の人数分</strong>（人数が多いほど速い）<br>
-        ・生産コストは会社予算から引かれる
+        ・生産コストは会社予算から引かれる<br>
+        ・<strong>会社予算が生産コストに満たない場合は生産できません</strong>（借金状態での生産は不可）
       </div>
     </div>
 
@@ -413,7 +414,7 @@ export function buildRules() {
         <div style="background:#fff8e1;border-radius:6px;padding:8px 10px;font-size:12px">
           <strong>🎯 ルーレット当選番号速報</strong>（原価: <span style="color:#e74c3c;font-weight:700">20,000 COIN/個</span>）<br>
           <span style="color:#555">10%の確率で次回ルーレットの当選番号が事前にわかる<br>
-          ※ 当たるかどうかは生産時点で決定される（外れでも1枚消費）</span>
+          ※ 当たるかどうかは使用時に決定される（外れでも1枚消費）</span>
         </div>
         <div style="background:#f9f8f6;border-radius:6px;padding:8px 10px;font-size:12px">
           <strong>🔍 株売買履歴閲覧装置</strong>（原価: 100 COIN/個）<br>

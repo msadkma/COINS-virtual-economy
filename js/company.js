@@ -143,10 +143,10 @@ export function buildCompany(p, S) {
 
         ${amOwner ? `
         <div style="margin-bottom:8px">
-          <label class="form-label">会社予算に入金する</label>
+          <label class="form-label">会社予算に入金する（1回100,000,000 COINまで）</label>
           <div class="row" style="gap:6px">
             <input class="input" id="budget-${c.id}" type="number"
-                   min="1" placeholder="入金額" style="width:120px"/>
+                   min="1" max="100000000" placeholder="入金額" style="width:120px"/>
             <button class="btn btn-primary"
                     onclick="W.depositToBudget('${c.id}')">入金</button>
             <span class="hint">自分の積立: <span class="din">${fmt(c.budget?.[S.uid]?.deposited||0)}</span> C</span>
