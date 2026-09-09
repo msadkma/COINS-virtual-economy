@@ -5,6 +5,33 @@ import { callFn, toast, fmt, r, esc,
          calcBetLimit, currentBetUsage } from './firebase.js';
 import { S, withSubmit } from './ui.js';
 
+// ---- 株売買履歴（株売買履歴閲覧装置 使用中のみ取得可能）のキャッシュ ----
+let tradeHistoryCache   = null;
+let tradeHistoryLoading = false;
+let _onTradeHistoryLoaded = null;
+
+export function setTradeHistoryLoadedCallback(cb) {
+  _onTradeHistoryLoaded = cb;
+}
+
+export async function loadTradeHistory() {
+  if (tradeHistoryLoading) return;
+  tradeHistoryLoading = true;
+  try {
+    tradeHistoryCache = await callFn('getTradeHistory', {});
+    if (_onTradeHistoryLoaded) _onTradeHistoryLoaded();
+  } catch(e) {
+    console.error('trade history:', e.message);
+  } finally {
+    tradeHistoryLoading = false;
+  }
+}
+
+export function reloadTradeHistory() {
+  tradeHistoryCache = null;
+  return loadTradeHistory();
+}
+
 export async function buyStock(symbol) {
   await withSubmit(async () => {
     const qty = parseInt(document.getElementById('buy-' + symbol)?.value) || 0;
@@ -42,6 +69,8 @@ export function buildInvest(p, S) {
     <div class="hint" style="margin-top:4px">ルーレットベット + 投資コストが賭け上限を超えることはできません</div>
   </div>
   <div class="hint" style="margin-bottom:10px">★ 株価は12時間ごとに更新 | 40%の確率で変動方向が逆転</div>`;
+
+  html += buildTradeHistoryPanel(p, S);
 
   for (const [sym, s] of Object.entries(S.stocks)) {
     const held = r(p.holdings?.[sym] || 0);
@@ -81,4 +110,43 @@ export function buildInvest(p, S) {
     </div>`;
   }
   return html;
+}
+
+// ============================================================
+//  株売買履歴パネル（株売買履歴閲覧装置 使用中のみ表示）
+// ============================================================
+function buildTradeHistoryPanel(p, S) {
+  const active = p.tradeViewerExpires && Date.now() < p.tradeViewerExpires;
+  if (!active) return '';
+
+  const exp = new Date(p.tradeViewerExpires).toLocaleTimeString('ja-JP');
+  let body;
+  if (!tradeHistoryCache) {
+    loadTradeHistory();
+    body = `<div class="hint" style="text-align:center;padding:16px">📊 読み込み中...</div>`;
+  } else {
+    const trades = tradeHistoryCache.trades || [];
+    body = trades.length === 0
+      ? `<p style="color:#888;text-align:center;padding:16px">まだ取引履歴がありません</p>`
+      : trades.map(t => `
+        <div class="row" style="margin-bottom:4px;gap:6px">
+          <span class="hint">${new Date(t.timestamp).toLocaleString('ja-JP')}</span>
+          <span>${esc(t.name||'???')}</span>
+          <span class="${t.type==='buy'?'price-up':'price-down'}">${t.type==='buy'?'買い':'売り'}</span>
+          <span>${esc(t.symbol||'')}</span>
+          <span class="din">${fmt(t.qty)}株</span>
+          <span class="spacer"></span>
+          <span class="din">${fmt(t.amount)} C</span>
+        </div>`).join('');
+  }
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="margin-bottom:6px">
+      <span class="card-title" style="margin:0">🔍 株売買履歴</span>
+      <span class="spacer"></span>
+      <span class="hint">${exp}まで閲覧可</span>
+      <button class="btn btn-sm" style="margin-left:6px" onclick="W._reloadTradeHistory()">🔄</button>
+    </div>
+    <div style="max-height:260px;overflow-y:auto">${body}</div>
+  </div>`;
 }
