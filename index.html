@@ -220,7 +220,9 @@ import { doDeposit, addDeposit, withdrawDeposit,
          cancelWithdrawTermDeposit }               from './js/deposit.js';
 import { placeBet, toggleBet, clearBets,
          watchRouletteResult }                      from './js/roulette.js';
-import { buyStock, sellStock }                      from './js/invest.js';
+import { buyStock, sellStock,
+         setTradeHistoryLoadedCallback,
+         reloadTradeHistory }                        from './js/invest.js';
 import { foundCompany, inviteCoOwner,
          acceptInvite, rejectInvite,
          buyCompanyStock, sellCompanyStock,
@@ -281,6 +283,7 @@ window.W = {
   _setMode(m)  { S.lmode=m; S.lerr=''; renderLogin(); },
   _setRankTab(tab) { S.rankTab = tab; scheduleRender(); },
   _reloadMonthly() { loadMonthlyRanking().then(() => scheduleRender()); },
+  _reloadTradeHistory() { reloadTradeHistory(); },
   _setTab(t)   { S.tab=t; scheduleRender(); },
   _toggleBet(type) { toggleBet(type); },
   _clearBets() { clearBets(); },
@@ -348,6 +351,8 @@ async function main() {
       subscribeMarket();
       // 月間ランキングロード完了後に再描画するコールバックを設定
       setMonthlyLoadedCallback(() => scheduleRender());
+      // 株売買履歴ロード完了後に再描画するコールバックを設定
+      setTradeHistoryLoadedCallback(() => scheduleRender());
       S.tab='home';
       scheduleRender();
     },
