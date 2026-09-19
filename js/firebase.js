@@ -3,7 +3,7 @@
 // ============================================================
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, get, set, update, onValue, off }
+import { getDatabase, ref, get, onValue, off }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -31,9 +31,15 @@ export const auth      = getAuth(app);
 const functions        = getFunctions(app, "asia-northeast1"); // 東京リージョン
 
 // ---- DB ヘルパー（読み取り専用） ----
-export const dbGet    = async p => { const s=await get(ref(db,p)); return s.exists()?s.val():null; };
-export const dbSet    = (p,v)   => set(ref(db,p), v);
-export const dbUpdate = (p,v)   => update(ref(db,p), v);
+// ★ 以前はここに dbSet/dbUpdate（クライアントから直接DBへ書き込む関数）も
+//   あったが、ゲームロジックへの書き込みはすべて Cloud Functions
+//   （callFn）経由に統一されており、クライアントコードのどこからも
+//   呼ばれていなかった。存在するだけで「ブラウザのコンソールから直接
+//   データを書き換えられるのでは」という無用な攻撃面になるため削除する。
+//   実際の書き込み制御は Realtime Database のセキュリティルール側で
+//   全パスに対して書き込み拒否（Cloud FunctionsのAdmin SDKはルールを
+//   無視して書き込めるため支障はない）にすることを別途確認・徹底する。
+export const dbGet = async p => { const s=await get(ref(db,p)); return s.exists()?s.val():null; };
 
 // ---- Cloud Functions 呼び出しラッパー ----
 // 各関数を事前にバインドしておく
@@ -104,19 +110,30 @@ export function calcInterest(p) {
 export const calcInterestWithTrait = calcInterest;
 
 // ---- ランキング用スコア ----
+// ★ companyInvested（会社への出資額）を含めないとサーバー側のrankTotal算出
+//   （functions/index.js）とズレて、画面表示の資産・賭け上限プレビューが
+//   実際の値と食い違ってしまうため、必ずサーバー側の計算式と一致させる。
 export function rankTotal(p) {
   return r((p.coins||0)+(p.deposit?.principal||0)+(p.termDeposit?.principal||0)
-          +(p.rouletteBet||0)+(p.investedCost||0));
+          +(p.rouletteBet||0)+(p.investedCost||0)+(p.companyInvested||0));
 }
 
 // ---- 全体資産・平均 ----
+// ★ 借金（マイナス資産）のプレイヤーを含めて平均を取ると、悪ふざけで
+//   莫大な借金を抱えるだけで全プレイヤーの平均資産額が0を下回り、
+//   ルーレット・投資の賭け上限がゼロになってしまう。サーバー側
+//   （functions/index.js の totalAssetsAll/avgAsset）と同じく、
+//   プラス資産のプレイヤーのみを対象に集計する。
+function positiveRankTotals(playersMeta) {
+  return Object.values(playersMeta).map(m=>m.rankTotal||0).filter(rt=>rt>0);
+}
 export function totalAssetsAll(playersMeta) {
-  return Math.max(1, Object.values(playersMeta).reduce((s,m)=>s+(m.rankTotal||0),0));
+  return Math.max(1, positiveRankTotals(playersMeta).reduce((s,rt)=>s+rt,0));
 }
 export function avgAsset(playersMeta) {
-  const metas = Object.values(playersMeta);
-  if (!metas.length) return 0;
-  return totalAssetsAll(playersMeta) / metas.length;
+  const rts = positiveRankTotals(playersMeta);
+  if (!rts.length) return 0;
+  return rts.reduce((s,rt)=>s+rt,0) / rts.length;
 }
 
 // ---- 賭け上限（修正版） ----

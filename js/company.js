@@ -1,7 +1,7 @@
 // ============================================================
 //  js/company.js  起業制度
 // ============================================================
-import { callFn, dbGet, dbSet, dbUpdate, auth, toast, fmt, r, esc,
+import { callFn, dbGet, auth, toast, fmt, r, esc,
          rankTotal } from './firebase.js';
 import { S, withSubmit, renderPanel } from './ui.js';
 
