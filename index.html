@@ -1,280 +1,545 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏛 架空市場</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DIN+Condensed:wght@700&display=swap" rel="stylesheet">
-<!--
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  【ファイル構成】
-  fictional_market/
-  ├── index.html          ← このファイル
-  ├── js/
-  │   ├── firebase.js     Firebase初期化・共通関数
-  │   ├── auth.js         ログイン・ログアウト
-  │   ├── ui.js           レンダリング・ホーム・預金UI
-  │   ├── tickets.js      チケット変換
-  │   ├── deposit.js      預金・定期預金
-  │   ├── roulette.js     ルーレット
-  │   ├── invest.js       投資
-  │   └── ranking.js      ランキング
-  └── api/                PHPバックエンド（別サーバーにアップロード）
-      ├── config.php
-      ├── middleware.php
-      ├── ticket.php
-      ├── deposit.php
-      ├── roulette.php
-      ├── invest.php
-      └── bonus.php
-
-  【セットアップ手順】
-  1. js/firebase.js の FIREBASE_CONFIG と API_BASE を設定
-  2. api/config.php の各設定値を入力
-  3. api/ フォルダを PHP対応ホスティングにアップロード
-  4. Firebaseコンソールでルールを設定（middleware.php 参照）
-  5. このフォルダをGitHub Pagesで公開
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--->
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Helvetica Neue',sans-serif;font-size:14px;background:#f5f4f1;color:#1a1a1a;min-height:100vh}
-.din{font-family:'DIN Condensed',system-ui,sans-serif;font-weight:700;letter-spacing:.5px}
-#app{min-height:100vh}
-.header{background:#fff;border-bottom:1px solid #e0ddd8;padding:10px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
-.logo{font-weight:800;font-size:16px}
-.spacer{flex:1}
-.tab-bar{display:flex;background:#fff;border-bottom:1px solid #e0ddd8;overflow-x:auto;scrollbar-width:none}
-.tab-bar::-webkit-scrollbar{display:none}
-.tab{padding:10px 13px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2.5px solid transparent;white-space:nowrap;font-family:inherit;transition:all .15s}
-.tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:700}
-.tab:hover:not(.active){background:#f5f4f1;color:#1a1a1a}
-.panel{padding:14px;max-width:680px;margin:0 auto}
-.card{background:#fff;border:1px solid #e0ddd8;border-radius:10px;padding:14px 16px;margin-bottom:12px}
-.card-title{font-weight:700;font-size:14px;margin-bottom:10px}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-.metric{background:#fff;border:1px solid #e0ddd8;border-radius:8px;padding:10px;text-align:center}
-.ml{font-size:11px;color:#888;margin-bottom:3px}
-.mv{font-size:22px;font-weight:700}
-.mu{font-size:11px;color:#888;font-weight:400;font-family:system-ui}
-.btn{padding:7px 14px;border:1px solid #ccc;border-radius:7px;background:#fff;cursor:pointer;font-size:13px;color:#1a1a1a;font-family:inherit;transition:all .15s;white-space:nowrap}
-.btn:hover:not(:disabled){background:#f0ede8}
-.btn:active:not(:disabled){transform:scale(.98)}
-.btn:disabled{opacity:.4;cursor:not-allowed}
-.btn-sm{padding:5px 10px;font-size:12px}
-.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
-.btn-primary:hover:not(:disabled){background:#333}
-.btn-danger{border-color:#c0392b;color:#c0392b}
-.btn-danger:hover:not(:disabled){background:#fff5f5}
-.btn-gold{border-color:#b8860b;color:#6b4c00;background:#fffbf0}
-.btn-gold:hover:not(:disabled){background:#fff0c0}
-.input{padding:7px 10px;border:1px solid #ccc;border-radius:7px;background:#fff;color:#1a1a1a;font-size:13px;font-family:inherit}
-.input:focus{outline:2px solid #1a1a1a;outline-offset:1px}
-.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hint{font-size:12px;color:#888}
-.hint-label{font-size:13px;color:#555}
-.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-.badge-dark{background:#1a1a1a;color:#fff}
-.badge-blue{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.badge-green{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
-.badge-red{background:#fff0f0;color:#991b1b;border:1px solid #fecaca}
-.badge-purple{background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff}
-.badge-gold{background:#fffbf0;color:#7a5c00;border:1px solid #d4a800}
-.badge-orange{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
-.progress-bar{height:5px;background:#e5e3de;border-radius:3px;overflow:hidden}
-.progress-fill{height:100%;background:#1a1a1a;transition:width 1s linear}
-.err{color:#c0392b;font-size:12px;margin-top:6px;padding:6px 10px;background:#fff0f0;border-radius:6px;border:1px solid #fecaca}
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-card{background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:28px;width:100%;max-width:340px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-.login-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:4px}
-.login-sub{font-size:12px;color:#888;text-align:center;margin-bottom:20px}
-.mode-btns{display:flex;border:1px solid #ccc;border-radius:7px;overflow:hidden;margin-bottom:18px}
-.mode-btn{flex:1;padding:9px;border:none;background:#fff;cursor:pointer;font-size:13px;color:#666;font-family:inherit;transition:all .15s}
-.mode-btn.active{background:#1a1a1a;color:#fff;font-weight:700}
-.form-group{margin-bottom:14px}
-.form-label{font-size:12px;color:#555;margin-bottom:5px;display:block;font-weight:600}
-.ticket-section{background:#f9f8f6;border:1px solid #e8e5e0;border-radius:8px;padding:10px 12px}
-.ticket-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.ticket-label{font-size:13px;font-weight:600;flex:1}
-.ticket-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.r-cell{padding:5px 2px;text-align:center;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;border:2px solid transparent;transition:all .1s;user-select:none;line-height:1.2;position:relative}
-.r-cell:hover{opacity:.8;transform:scale(1.08)}
-.r-cell.sel{border-color:#fff!important;box-shadow:0 0 0 2px #1a1a1a}
-.r-red{background:#c0392b;color:#fff;border-color:#c0392b}
-.r-black{background:#2c2c2c;color:#fff;border-color:#2c2c2c}
-.r-green{background:#1d9e75;color:#fff;border-color:#1d9e75}
-.r-out{background:#f0ede8;color:#1a1a1a;border:1px solid #ccc}
-.r-out.sel{border:2px solid #1a1a1a!important;box-shadow:none}
-.other-bet-dot{position:absolute;top:1px;right:2px;width:5px;height:5px;background:#f39c12;border-radius:50%;border:1px solid rgba(255,255,255,.8)}
-.rank-row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:8px;border-bottom:1px solid #e0ddd8}
-.rank-row:last-child{border-bottom:none}
-.rank-row.me{background:#f5f4f1}
-.rank-num{font-size:18px;width:28px;text-align:center}
-.price-up{color:#166534}
-.price-down{color:#991b1b}
-.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;background:#1a1a1a;color:#fff;border-radius:8px;font-size:13px;z-index:9999;max-width:280px;animation:fadeIn .2s ease;pointer-events:none}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.roulette-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px}
-.roulette-modal.hidden{display:none}
-.wheel-wrap{position:relative;width:260px;height:260px}
-.wheel-canvas{border-radius:50%;box-shadow:0 0 0 6px #8B6914,0 0 0 10px #5a4208,0 6px 30px rgba(0,0,0,.6)}
-.wheel-pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:22px solid #e74c3c;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
-.wheel-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;background:radial-gradient(circle,#f5e642,#c9a800);border-radius:50%;border:3px solid #8B6914;box-shadow:0 0 8px rgba(0,0,0,.4)}
-.modal-result{font-family:'DIN Condensed',system-ui,sans-serif;font-size:36px;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:44px;text-align:center}
-.modal-sub{font-size:15px;color:#ddd;text-align:center;min-height:24px}
-.modal-btn{padding:10px 28px;background:#fff;color:#1a1a1a;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s}
-.modal-btn:hover{background:#eee}
-.modal-btn.hidden{display:none}
-.limit-bar{height:8px;background:#e5e3de;border-radius:4px;overflow:hidden;margin-top:6px}
-.limit-fill{height:100%;border-radius:4px;transition:width .3s}
-.bonus-indicator{background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
-@media(max-width:480px){.metrics{grid-template-columns:repeat(2,1fr)}.tab{padding:9px 10px;font-size:12px}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不等号セレクターゲーム</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .level-selector {
+            margin-bottom: 30px;
+        }
+        .level-btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 0 10px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .level-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .level-btn.active {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        .game-area {
+            display: none;
+            margin-top: 30px;
+        }
+        .game-area.active {
+            display: block;
+        }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #666;
+        }
+        .problem {
+            font-size: 2em;
+            margin: 30px 0;
+            color: #333;
+            font-weight: bold;
+        }
+        .inequality-buttons {
+            margin: 20px 0;
+        }
+        .inequality-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            margin: 0 15px;
+            border-radius: 15px;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .inequality-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 20px 0;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .result.correct {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .result.incorrect {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .final-result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 15px;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .final-result.pass {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .final-result.fail {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .start-btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .level-info {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
 </head>
 <body>
-
-<div id="app">
-  <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#888">
-    <div style="text-align:center">
-      <div style="font-size:40px;margin-bottom:16px">🏛</div>
-      <div>読み込み中...</div>
+    <div class="game-container">
+        <h1>不等号セレクターゲーム</h1>
+        
+        <div class="level-selector">
+            <button class="level-btn active" onclick="selectLevel(3, this)">3級</button>
+            <button class="level-btn" onclick="selectLevel(2, this)">2級</button>
+            <button class="level-btn" onclick="selectLevel(1, this)">1級</button>
+        </div>
+        
+        <div class="level-info" id="levelInfo">
+            <strong>3級:</strong> 分数・小数の問題 (10問中8問正解で合格)
+        </div>
+        
+        <div class="game-area active" id="gameArea">
+            <div class="game-info">
+                <span>問題 <span id="currentQuestion">0</span>/<span id="totalQuestions">0</span></span>
+                <span>正解数: <span id="correctCount">0</span></span>
+            </div>
+            
+            <div class="timer" id="timer">30秒</div>
+            
+            <div class="problem" id="problem">
+                <button class="start-btn" onclick="startGame()">ゲーム開始</button>
+            </div>
+            
+            <div class="inequality-buttons" id="inequalityButtons" style="display:none;">
+                <button class="inequality-btn" onclick="selectAnswer('<')">&lt;</button>
+                <button class="inequality-btn" onclick="selectAnswer('>')">></button>
+            </div>
+            
+            <div class="result" id="result"></div>
+            <div class="final-result" id="finalResult"></div>
+        </div>
     </div>
-  </div>
-</div>
-<div id="toasts"></div>
 
-<!-- ルーレット演出モーダル -->
-<div class="roulette-modal hidden" id="roulette-modal">
-  <div class="wheel-wrap">
-    <canvas class="wheel-canvas" id="wheel-canvas" width="260" height="260"></canvas>
-    <div class="wheel-pointer"></div>
-    <div class="wheel-center"></div>
-  </div>
-  <div class="modal-result" id="modal-result">🎰 スピン中...</div>
-  <div class="modal-sub"    id="modal-sub"></div>
-  <button class="modal-btn hidden" id="modal-close-btn" onclick="W._closeModal()">閉じる</button>
-</div>
+    <script>
+        let currentLevel = 3;
+        let currentQuestion = 0;
+        let correctCount = 0;
+        let timeLeft = 30;
+        let timer = null;
+        let gameActive = false;
+        let currentAnswer = '';
+        let leftValue = 0;
+        let rightValue = 0;
 
-<script type="module">
-import { auth, dbGet, dbSet, subscribeAll, toast, callApi } from './js/firebase.js';
-import { S, scheduleRender, doRender, renderPanel,
-         withSubmit, updateMetricsOnly, resetMain } from './js/ui.js';
-import { renderLogin, login, logout, pushMeta, initAuth } from './js/auth.js';
-import { useTicket }           from './js/tickets.js';
-import { doDeposit, addDeposit, withdrawDeposit,
-         doTermDeposit, withdrawTermDeposit }  from './js/deposit.js';
-import { placeBet, toggleBet, clearBets,
-         processRoulette }     from './js/roulette.js';
-import { buyStock, sellStock, updateStockPrices } from './js/invest.js';
+        const levelConfig = {
+            3: {
+                totalQuestions: 10,
+                passThreshold: 8,
+                info: '<strong>3級:</strong> 分数・小数の問題 (10問中8問正解で合格)'
+            },
+            2: {
+                totalQuestions: 15,
+                passThreshold: 10,
+                info: '<strong>2級:</strong> 分数・小数・除算の問題 (15問中10問正解で合格)'
+            },
+            1: {
+                totalQuestions: 20,
+                passThreshold: 12,
+                info: '<strong>1級:</strong> 分数・除算・三角関数・シグマ・微積分の問題 (20問中12問正解で合格)'
+            }
+        };
 
-// ---- 初期データ保証 ----
-async function ensureDefaults() {
-  if (!await dbGet('roulette'))
-    await dbSet('roulette', { next: Date.now()+3600000, bets:{}, last:null, processing:false });
-  if (!await dbGet('stocks')) {
-    const now = Date.now();
-    await dbSet('stocks', {
-      ALPHA: { name:'Alpha Corp', price:100, history:[100], nextUpdate:now+43200000 },
-      BETA:  { name:'Beta Inc',   price:80,  history:[80],  nextUpdate:now+43200000 },
-      GAMMA: { name:'Gamma Ltd',  price:50,  history:[50],  nextUpdate:now+43200000 },
-    });
-  }
-}
+        function selectLevel(level, buttonElement) {
+            currentLevel = level;
+            document.querySelectorAll('.level-btn').forEach(btn => btn.classList.remove('active'));
+            buttonElement.classList.add('active');
+            document.getElementById('levelInfo').innerHTML = levelConfig[level].info;
+            resetGame();
+        }
 
-// ---- 定期チェック ----
-let checking = false;
-async function periodicCheck() {
-  if (!S.uid || checking) return;
-  checking = true;
-  try {
-    // チケット付与（PHPサーバー側で正確に計算）
-    await callApi('bonus.php', { action: 'ticket_check' }).catch(() => {});
-    // ルーレット開催チェック
-    if (S.roulette && Date.now() >= S.roulette.next) {
-      await processRoulette();
-    }
-    // 株価更新チェック
-    await updateStockPrices().catch(() => {});
-    // デイリーボーナスチェック
-    await callApi('bonus.php', { action: 'daily_bonus' })
-      .then(d => { if (d.bonus > 0) toast(`🎁 デイリーボーナス +${d.bonus} COIN！`, 5000); })
-      .catch(() => {});
-  } finally {
-    checking = false;
-  }
-}
+        function resetGame() {
+            currentQuestion = 0;
+            correctCount = 0;
+            timeLeft = 30;
+            gameActive = false;
+            clearInterval(timer);
+            
+            document.getElementById('currentQuestion').textContent = currentQuestion;
+            document.getElementById('totalQuestions').textContent = levelConfig[currentLevel].totalQuestions;
+            document.getElementById('correctCount').textContent = correctCount;
+            document.getElementById('timer').textContent = '30秒';
+            document.getElementById('problem').innerHTML = '<button class="start-btn" onclick="startGame()">ゲーム開始</button>';
+            document.getElementById('inequalityButtons').style.display = 'none';
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('finalResult').innerHTML = '';
+        }
 
-// ---- 公開API (W.*) ----
-window.W = {
-  // 内部ヘルパー
-  _setMode(m)  { S.lmode = m; S.lerr = ''; renderLogin(); },
-  _setTab(t)   { S.tab = t; scheduleRender(); },
-  _toggleBet(type) { toggleBet(type); },
-  _clearBets() { clearBets(); },
-  _qt(kind, n) {
-    const el = document.getElementById(kind==='n' ? 'conv-n' : 'conv-r');
-    if (el) el.value = String(n);
-  },
-  _closeModal() { document.getElementById('roulette-modal').classList.add('hidden'); },
+        function startGame() {
+            gameActive = true;
+            document.getElementById('gameArea').classList.add('active');
+            nextQuestion();
+        }
 
-  // 認証
-  login,
-  logout,
+        function nextQuestion() {
+            if (currentQuestion >= levelConfig[currentLevel].totalQuestions) {
+                endGame();
+                return;
+            }
 
-  // チケット
-  useTicket,
+            currentQuestion++;
+            document.getElementById('currentQuestion').textContent = currentQuestion;
+            document.getElementById('result').innerHTML = '';
+            
+            generateProblem();
+            startTimer();
+            document.getElementById('inequalityButtons').style.display = 'block';
+        }
 
-  // 預金
-  doDeposit, addDeposit, withdrawDeposit,
-  doTermDeposit, withdrawTermDeposit,
+        function generateProblem() {
+            let problemText = '';
+            
+            if (currentLevel === 3) {
+                // 3級: 分数・小数から2つ選択
+                let types = ['fraction', 'decimal'];
+                let leftType = types[Math.floor(Math.random() * types.length)];
+                let rightType = types[Math.floor(Math.random() * types.length)];
+                
+                [leftValue, problemText] = generateValue(leftType, 3, true);
+                let rightResult = generateValue(rightType, 3, false);
+                rightValue = rightResult[0];
+                problemText += ' __ ' + rightResult[1];
+                
+                // 等しくならないようにする
+                let attempts = 0;
+                while (Math.abs(leftValue - rightValue) < 0.001 && attempts < 50) {
+                    rightResult = generateValue(rightType, 3, false);
+                    rightValue = rightResult[0];
+                    attempts++;
+                }
+                if (attempts >= 50) {
+                    rightValue = leftValue + (Math.random() > 0.5 ? 0.1 : -0.1);
+                    rightResult[1] = rightValue.toFixed(2);
+                }
+                problemText = problemText.split(' __ ')[0] + ' __ ' + rightResult[1];
+                
+            } else if (currentLevel === 2) {
+                // 2級: 分数・小数・除算から2つ選択、差0.1未満
+                let types = ['fraction2', 'decimal2', 'division'];
+                let leftType = types[Math.floor(Math.random() * types.length)];
+                let rightType = types[Math.floor(Math.random() * types.length)];
+                
+                [leftValue, problemText] = generateValue(leftType, 2, true);
+                let rightResult = generateValue(rightType, 2, false);
+                rightValue = rightResult[0];
+                problemText += ' __ ' + rightResult[1];
+                
+                // 差が0.1未満で、かつ等しくならないように調整
+                let attempts = 0;
+                while ((Math.abs(leftValue - rightValue) >= 0.1 || Math.abs(leftValue - rightValue) < 0.001) && attempts < 100) {
+                    rightResult = generateValue(rightType, 2, false);
+                    rightValue = rightResult[0];
+                    attempts++;
+                }
+                if (attempts >= 100) {
+                    // 強制的に差を0.1未満かつ等しくならないようにする
+                    let diff = (Math.random() * 0.09) + 0.01;
+                    rightValue = leftValue + (Math.random() > 0.5 ? diff : -diff);
+                    if (rightType === 'fraction2') {
+                        rightResult[1] = Math.floor(rightValue * 100) + '/100';
+                    } else if (rightType === 'decimal2') {
+                        rightResult[1] = rightValue.toFixed(3);
+                    } else {
+                        rightResult[1] = Math.floor(rightValue * 1000) + '÷1000';
+                    }
+                }
+                problemText = problemText.split(' __ ')[0] + ' __ ' + rightResult[1];
+                
+            } else if (currentLevel === 1) {
+                // 1級: 5つの系統から2つ選択、差0.02未満
+                let types = ['fraction1', 'division1'];
+                if (currentQuestion >= 10) types.push('trigonometry');
+                if (currentQuestion >= 12) types.push('sigma');
+                if (currentQuestion >= 15) types.push('calculus');
+                
+                let leftType = types[Math.floor(Math.random() * types.length)];
+                let rightType = types[Math.floor(Math.random() * types.length)];
+                
+                [leftValue, problemText] = generateValue(leftType, 1, true);
+                let rightResult = generateValue(rightType, 1, false);
+                rightValue = rightResult[0];
+                problemText += ' __ ' + rightResult[1];
+                
+                // 差が0.02未満で、かつ等しくならないように調整
+                let attempts = 0;
+                while ((Math.abs(leftValue - rightValue) >= 0.02 || Math.abs(leftValue - rightValue) < 0.0001) && attempts < 100) {
+                    rightResult = generateValue(rightType, 1, false);
+                    rightValue = rightResult[0];
+                    attempts++;
+                }
+                if (attempts >= 100) {
+                    // 強制的に差を0.02未満かつ等しくならないようにする
+                    let diff = (Math.random() * 0.018) + 0.001;
+                    rightValue = leftValue + (Math.random() > 0.5 ? diff : -diff);
+                    if (rightType === 'fraction1') {
+                        rightResult[1] = Math.floor(rightValue * 100) + '/100';
+                    } else if (rightType === 'division1') {
+                        rightResult[1] = Math.floor(rightValue * 1000) + '÷1000';
+                    } else {
+                        rightResult[1] = rightValue.toFixed(4);
+                    }
+                }
+                problemText = problemText.split(' __ ')[0] + ' __ ' + rightResult[1];
+            }
+            
+            // 答えの決定
+            if (leftValue < rightValue) {
+                currentAnswer = '<';
+            } else if (leftValue > rightValue) {
+                currentAnswer = '>';
+            } else {
+                currentAnswer = '<'; // 万が一等しくなった場合のフォールバック
+            }
+            
+            document.getElementById('problem').innerHTML = problemText;
+        }
 
-  // ルーレット
-  placeBet,
+        function generateValue(type, level, isLeft) {
+            let value, text;
+            
+            if (type === 'fraction') {
+                // 3級分数
+                let num = Math.floor(Math.random() * 19) + 1;
+                let den = Math.floor(Math.random() * 19) + 1;
+                value = num / den;
+                text = `${num}/${den}`;
+            } else if (type === 'decimal') {
+                // 3級小数
+                value = Math.round((Math.random() * 2.99) * 100) / 100;
+                text = value.toFixed(2);
+            } else if (type === 'fraction2') {
+                // 2級分数
+                let num = Math.floor(Math.random() * 90) + 10;
+                let den = Math.floor(Math.random() * 199) + 100;
+                value = num / den;
+                text = `${num}/${den}`;
+            } else if (type === 'decimal2') {
+                // 2級小数
+                value = Math.round((Math.random() * 0.999) * 1000) / 1000;
+                text = value.toFixed(3);
+            } else if (type === 'division') {
+                // 2級除算
+                let num1 = Math.floor(Math.random() * 90) + 10;
+                let den1 = Math.floor(Math.random() * 900) + 100;
+                value = num1 / den1;
+                text = `${num1}÷${den1}`;
+            } else if (type === 'fraction1') {
+                // 1級分数
+                let num = Math.floor(Math.random() * 400) + 500;
+                let den = Math.floor(Math.random() * 90) + 10;
+                value = num / den;
+                text = `${num}/${den}`;
+            } else if (type === 'division1') {
+                // 1級除算
+                let num1 = Math.floor(Math.random() * 900) + 100;
+                let den1 = Math.floor(Math.random() * 90) + 10;
+                value = num1 / den1;
+                text = `${num1}÷${den1}`;
+            } else if (type === 'trigonometry') {
+                // 1級三角関数
+                let angle = Math.floor(Math.random() * 90) + 1;
+                let func = Math.random() < 0.5 ? 'sin' : 'cos';
+                value = func === 'sin' ? Math.sin(angle * Math.PI / 180) : Math.cos(angle * Math.PI / 180);
+                text = `${func}(${angle}°)`;
+            } else if (type === 'sigma') {
+                // 1級シグマ（複雑化）
+                let n = Math.floor(Math.random() * 3) + 3;
+                let sigmaType = Math.floor(Math.random() * 4);
+                
+                if (sigmaType === 0) {
+                    // Σ(i²) = n(n+1)(2n+1)/6
+                    value = n * (n + 1) * (2 * n + 1) / 6;
+                    text = `Σ(i=1 to ${n})i²`;
+                } else if (sigmaType === 1) {
+                    // Σ(i³) = [n(n+1)/2]²
+                    value = Math.pow(n * (n + 1) / 2, 2);
+                    text = `Σ(i=1 to ${n})i³`;
+                } else if (sigmaType === 2) {
+                    // Σ(1/i) の近似（調和数列）
+                    value = 0;
+                    for (let i = 1; i <= n; i++) {
+                        value += 1 / i;
+                    }
+                    text = `Σ(i=1 to ${n})(1/i)`;
+                } else {
+                    // Σ(sin(iπ/n))
+                    value = 0;
+                    for (let i = 1; i <= n; i++) {
+                        value += Math.sin(i * Math.PI / n);
+                    }
+                    text = `Σ(i=1 to ${n})sin(iπ/${n})`;
+                }
+            } else if (type === 'calculus') {
+                // 1級微積分（複雑化）
+                let calcType = Math.floor(Math.random() * 4);
+                let a = Math.floor(Math.random() * 4) + 1;
+                
+                if (calcType === 0) {
+                    // ∫x²dx = x³/3
+                    value = Math.pow(a, 3) / 3;
+                    text = `∫(0 to ${a})x²dx`;
+                } else if (calcType === 1) {
+                    // ∫sin(x)dx = -cos(x) (xはラジアン)
+                    value = -Math.cos(a) + 1;
+                    text = `∫(0 to ${a})sin(x)dx`;
+                } else if (calcType === 2) {
+                    // ∫1/x dx = ln(x) from 1 to a
+                    value = Math.log(a);
+                    text = `∫(1 to ${a})1/x dx`;
+                } else {
+                    // d/dx(x³) at x=a = 3a²
+                    value = 3 * a * a;
+                    text = `d/dx(x³)|x=${a}`;
+                }
+            }
+            
+            return [value, text];
+        }
 
-  // 投資
-  buyStock, sellStock,
-};
+        function startTimer() {
+            timeLeft = 30;
+            document.getElementById('timer').textContent = timeLeft + '秒';
+            
+            timer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft + '秒';
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    showResult(false, '時間切れ！');
+                }
+            }, 1000);
+        }
 
-// トーストをグローバルに公開
-window._toast = toast;
+        function selectAnswer(answer) {
+            if (!gameActive) return;
+            
+            clearInterval(timer);
+            
+            if (answer === currentAnswer) {
+                correctCount++;
+                document.getElementById('correctCount').textContent = correctCount;
+                showResult(true, '正解！');
+            } else {
+                showResult(false, `不正解！正解は "${currentAnswer}" でした。`);
+            }
+        }
 
-// ---- 起動 ----
-async function main() {
-  renderLogin();
+        function showResult(isCorrect, message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = 'result ' + (isCorrect ? 'correct' : 'incorrect');
+            
+            setTimeout(() => {
+                nextQuestion();
+            }, 2000);
+        }
 
-  initAuth(
-    // ログイン時
-    async (user) => {
-      await ensureDefaults();
-      const p = await dbGet(`players/${S.uid}`);
-      if (p) { S.pname = p.name; await pushMeta(p); }
+        function endGame() {
+            gameActive = false;
+            clearInterval(timer);
+            
+            const config = levelConfig[currentLevel];
+            const passed = correctCount >= config.passThreshold;
+            
+            const finalResultDiv = document.getElementById('finalResult');
+            finalResultDiv.innerHTML = `
+                <h3>ゲーム終了！</h3>
+                <p>${config.totalQuestions}問中${correctCount}問正解</p>
+                <p><strong>${passed ? '合格！' : '不合格'}</strong></p>
+                <p>合格ライン: ${config.passThreshold}問</p>
+                <button class="start-btn" onclick="resetGame()">もう一度挑戦</button>
+            `;
+            finalResultDiv.className = 'final-result ' + (passed ? 'pass' : 'fail');
+            
+            document.getElementById('problem').innerHTML = '';
+            document.getElementById('inequalityButtons').style.display = 'none';
+            document.getElementById('timer').textContent = '';
+        }
 
-      // リアルタイム購読
-      subscribeAll(S.uid, {
-        onPlayer:   v => { if(v) { S.players[S.uid]=v; if(!S.submitting) scheduleRender(); } },
-        onMeta:     v => { S.playersMeta=v||{};        if(!S.submitting) scheduleRender(); },
-        onRoulette: v => { S.roulette=v;               if(!S.submitting) scheduleRender(); },
-        onStocks:   v => { S.stocks=v||{};             if(!S.submitting) scheduleRender(); },
-      });
-
-      S.tab = 'home';
-      scheduleRender();
-    },
-    // ログアウト時
-    () => { resetMain(); renderLogin(); }
-  );
-
-  // タイマー
-  setInterval(updateMetricsOnly, 1000);
-  setInterval(periodicCheck, 10000);
-}
-
-main().catch(e => {
-  console.error(e);
-  document.getElementById('app').innerHTML =
-    `<div style="padding:40px;color:#c0392b"><h2>起動エラー</h2><p style="margin-top:8px;color:#444">${e.message}</p></div>`;
-});
-</script>
+        // 初期化
+        resetGame();
+    </script>
 </body>
 </html>
